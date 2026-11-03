@@ -1,18 +1,16 @@
-# v0.2.1 验证范围
+# v0.3.0 实际验收
 
-验证日期：2026-11-03。所有运行验证只使用隔离的虚拟数据，没有上传个人记录、测试档案、原始日志或系统截图。
+宿主：macOS 27.2.0、Apple Silicon、Electron 45.2.1。测试全部为隔离虚拟档案，未读取用户实际财务记录。
 
-- 41 项核心测试在 Asia/Shanghai、UTC、America/New_York 三个时区通过。
-- Apple Silicon App：macOS 27.2 原生运行，DMG 校验和、只读挂载、复制到独立测试目录、签名和首次使用检查通过，32+9 项窗口流程通过。
-- Intel x64 App：官方 Electron x64 ZIP 校验后构建；DMG 复制副本在 Apple Silicon + macOS 27.2 的 Rosetta 下执行，进程架构为 x64，`runningUnderARM64Translation` 为 true，32+9 项流程通过。Intel 硬件、macOS Sequoia 15.8.2 未实测。
-- Windows x64：交叉构建完成；安装器为 x86 Unicode NSIS 引导程序，应用本体为 PE x64。manifest 为 asInvoker，按当前用户安装，包含卸载入口。安装包校验与解包后 73 个应用文件逐字节一致；没有 Windows 实机或虚拟机，安装、启动和卸载未实测。
-- 三端应用使用相同 app.asar，产品源码文件与构建输入一致。
-- Mac 真实菜单栏鼠标点击、系统区域截图、Finder 鼠标拖拽/双击未执行。菜单栏创建与程序触发的点击处理器、实际详情窗口内交互通过。
-- 没有向系统 Applications 目录写入；测试复制到独立目录后通过系统 Launch Services 打开。
-- 未做物理休眠/掉电硬件测试，已验证时间戳序列化及窗口隐藏恢复。
+- 85 项单元测试在 UTC、Asia/Shanghai、America/New_York 分别通过；覆盖五种考勤、闰年与大小月、切换模式、旧快照、计薪/费用、目标池、摸鱼、返工及时间修正。
+- Apple Silicon：DMG CRC 校验通过，只读挂载后复制 App 到临时目录，推出磁盘，再通过 LaunchServices 默认参数启动；主流程 32、考勤 6、修正 7 组通过，综合功能 8 组通过。
+- Intel x64：在同一宿主的 Rosetta 下以默认参数完成相同 53 项/组检查，`process.arch=x64`、`app.runningUnderARM64Translation=true`。Intel 硬件与朋友的 macOS 15.8.2 未测。
+- Mac 两个 App 的 codesign 深度严格校验通过，签名为 ad-hoc；没有 Team ID、Developer ID 或公证票据，Gatekeeper 评估 rejected。实际浏览器下载后的隔离状态下无提示启动不作保证。
+- Windows：PE App 为 x64，安装器引导为 x86 Unicode；App 和安装器权限均 asInvoker，签名目录为空。安装器解包得到 73 个应用文件，大小和哈希逐一匹配打包源。没有 Windows 真机或虚拟机，安装、启动、升级、卸载未运行。
+- 三端 app.asar 的 SHA-256 均为 `929f0d6bb866c2e43688ac16466f571b26525b324d058ec92fb704ae0ceb526a`。仅含 src、desktop 和最小 package.json，共 45 个文件，运行源码与验收版本一致。
 
-Mac App 仅 ad-hoc 临时签名，未启用 hardened runtime，没有 Developer ID 或公证；签名完整性校验通过，但 Gatekeeper 评估拒绝。DMG 没有数字签名。Windows 应用和安装器均未进行 Authenticode 签名。以上均不能称为完整跨平台验收。
+验收中发现并处理了两项测试条件问题，产品代码未因此改变：平均时薪统一两位小数，固定等待 4.2 秒可能尚未跨过下一次显示刷新，改为有超时上限地等待可见下降，保持严格下降断言；Intel Rosetta 读取外置卷测试脚本时停在文件打开，改在内部临时目录运行相同测试后默认启动参数通过。没有关闭沙箱、禁用安全功能或自动批准权限。
 
-下班提醒为应用内弹窗，应用退出后不保证准点提醒；Windows 托盘未适配。
+菜单栏已验证原生 Tray 创建、坐标、标题和程序触发点击处理器；没有辅助功能/屏幕录制权限，未做真实鼠标点击或系统菜单栏截图。Finder 真实鼠标拖拽/双击未测；LaunchServices 启动成功不能冒称完成 Finder 鼠标操作。没有安装到系统 Applications。物理休眠、掉电、实体手机及 macOS 15.6.1 未测，手机截图只是视口模拟。
 
-附件 SHA-256 和字节大小见 [发布清单](../release-assets.json) 和 Release 附件 `SHA256SUMS.txt`。
+仓库截图来自实际运行窗口，均为虚拟数据。历史 v0.2.1 的测试结论不混入本轮结果。0.2.1 保留原 Release 与附件。

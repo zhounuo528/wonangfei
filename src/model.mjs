@@ -16,7 +16,8 @@ export function validateSettings(s) {
   if (!s || !finite(s.salary) || s.salary < 0 || s.salary > 1e9) throw Error('月薪请输入 0 到 10 亿之间的数字');
   if (!finite(s.payDays) || s.payDays <= 0 || s.payDays > 31) throw Error('计薪天数必须大于 0 且不超过 31');
   if (!Array.isArray(s.weekdays) || s.weekdays.some(d => !Number.isInteger(d) || d < 0 || d > 6)) throw Error('工作日设置无效');
-  if (s.scheduleMode !== undefined && !['double', 'single', 'alternating'].includes(s.scheduleMode)) throw Error('请选择双休、单休或大小周');
+  if (s.scheduleMode !== undefined && !['double', 'single', 'alternating', '996', 'everyday'].includes(s.scheduleMode)) throw Error('请选择双休、单休、大小周、996 或全年无休');
+  if (s.scheduleMode === 'everyday' && (s.weekdays.length !== 7 || new Set(s.weekdays).size !== 7)) throw Error('全年无休须包含星期日至星期六，每天均为工作日');
   if (s.scheduleMode === 'alternating' && (!isDateKey(s.anchorWeek) || localDate(s.anchorWeek).getDay() !== 1 || !['double', 'single'].includes(s.anchorKind) || !Array.isArray(s.alternateWeekdays) || s.alternateWeekdays.some(d => !Number.isInteger(d) || d < 0 || d > 6))) throw Error('大小周须选择周一基准日期、该周单双休及两种工作日');
   if (!validTime(s.start) || !validTime(s.end) || s.end <= s.start) throw Error('下班时间须晚于上班时间；本版仅支持同日班次');
   if (typeof s.lunch !== 'boolean') throw Error('午休选项无效');
@@ -30,6 +31,7 @@ export function windows(key, s) {
 }
 export const scheduledMs = (key, s) => sum(windows(key, s).map(([a, b]) => b - a));
 export function isWorkday(key, s) {
+  if (s.scheduleMode === 'everyday') return isDateKey(key);
   if (s.scheduleMode !== 'alternating') return s.weekdays.includes(localDate(key).getDay());
   const ordinal = value => { const [y, m, d] = value.split('-').map(Number); return Date.UTC(y, m - 1, d) / 86400000; };
   const weekIndex = Math.floor((ordinal(key) - ordinal(s.anchorWeek)) / 7), parity = ((weekIndex % 2) + 2) % 2;
@@ -39,7 +41,7 @@ export function isWorkday(key, s) {
 export const expenseForDate = (expense, key) => expense.scope === 'month' ? expense.month === monthKey(key) && expense.allocationDates.includes(key) ? expense.amount / expense.allocationDates.length : 0 : expense.date === key ? expense.amount : 0;
 export const ratePerMs = (key, s) => s.salary / s.payDays / scheduledMs(key, s);
 export function emptyState(now = new Date()) {
-  const state = { version: 1, onboarded: false, trackingStart: dateKey(now), settings: structuredClone(DEFAULT_SETTINGS), days: {}, expenses: [], fixed: [], display: 'today', goal: { name: '攒一份好心情', amount: 1000, period: 'month' }, reminder: { enabled: false, enabledAt: null, delivered: {} }, demo: null };
+  const state = { version: 1, onboarded: false, trackingStart: dateKey(now), settings: structuredClone(DEFAULT_SETTINGS), days: {}, expenses: [], fixed: [], display: 'today', goal: null, reminder: { enabled: false, enabledAt: null, delivered: {} }, demo: null };
   const monday = new Date(now); monday.setDate(monday.getDate() - (monday.getDay() + 6) % 7); state.settings.anchorWeek = dateKey(monday);
   return state;
 }
@@ -80,10 +82,11 @@ export function dayStats(state, key, now = Date.now()) {
   const merged = fishRanges.reduce((a, f) => { const prev = a.at(-1); if (prev && f[0] <= prev[1]) prev[1] = Math.max(prev[1], f[1]); else a.push([...f]); return a; }, []);
   const legacyFish = Math.min(elapsed, sum(paid.flatMap(p => merged.map(f => overlap(p, f)))));
   const fish = legacyFish + sum((day?.breaks ?? []).map(record => record.durationMs));
-  const earned = elapsed * ratePerMs(key, s), actual = Math.max(0, worked - fish);
+  const overtimePay = sum((day?.overtimeDecisions ?? []).filter(entry => entry.clockOutAt <= now).map(entry => entry.amount));
+  const baseEarned = elapsed * ratePerMs(key, s), earned = baseEarned + overtimePay, actual = Math.max(0, worked - fish);
   const expenses = sum(state.expenses.map(e => expenseForDate(e, key)));
   const fixed = fixedForDate(state, key);
-  return { earned, elapsed, worked, overtime, actual, fish, legacyFish, expenses, fixed, net: earned - expenses - fixed, hourly: actual > 0 ? earned / actual * 3600000 : null, secondly: actual > 0 ? earned / actual * 1000 : null, planned: scheduledMs(key, s), daily: s.salary / s.payDays, settings: s };
+  return { earned, baseEarned, overtimePay, elapsed, worked, overtime, actual, fish, legacyFish, expenses, fixed, net: earned - expenses - fixed, hourly: actual > 0 ? earned / actual * 3600000 : null, secondly: actual > 0 ? earned / actual * 1000 : null, planned: scheduledMs(key, s), daily: s.salary / s.payDays, settings: s };
 }
 export function activeSession(state, key, now) {
   const day = state.days[key];
@@ -118,25 +121,83 @@ export function stopWork(state, now) {
   day.sessions.forEach(s => { if (s.end === null) s.end = Math.max(s.start, now); });
   day.fish.forEach(f => { if (f.end === null) f.end = Math.max(f.start, Math.min(now, at(key, day.settings.end))); });
 }
-export function clockOut(state, now) {
+export function resumeWork(state, key, now) {
+  const day = state.days[key];
+  if (!isDateKey(key) || !day?.sessions.length || !finite(now) || dateKey(new Date(now)) < key) throw Error('请选择已下班的班次再返工');
+  const open = activeShift(state, now);
+  if (open) { if (open.key === key) return; throw Error('另一班次还在进行，请先下班'); }
+  if (day.sessions.some(session => session.end === null) || Math.max(...day.sessions.map(session => session.end)) > now) throw Error('返工时间不能早于原下班记录');
+  day.sessions.push({ start: now, end: null, resumed: true });
+}
+export function needsOvertimeDecision(state, now) {
+  const shift = activeShift(state, now);
+  return !!shift && dayStats(state, shift.key, now).overtime > 2 * 3600000;
+}
+export function clockOut(state, now, decision) {
   const key = activeShift(state, now)?.key ?? dateKey(new Date(now)), day = state.days[key];
   if (!day?.sessions.length) throw Error('请先开始上班，再查看下班总结');
   const hasOpen = day.sessions.some(session => session.end === null);
   if (!hasOpen && day.summary?.sessionCount === day.sessions.length) return day.summary;
+  const needsDecision = hasOpen && needsOvertimeDecision(state, now);
+  if (needsDecision && (!decision || !['free', 'paid'].includes(decision.kind) || !finite(decision.amount) || decision.amount < 0 || decision.amount > 1e9 || (decision.kind === 'free' ? decision.amount !== 0 : decision.amount <= 0))) throw Error('请选择免费加班，或填写大于 0、至多 10 亿的本次加班费');
+  const indexes = day.sessions.map((session, index) => session.end === null ? index : -1).filter(index => index >= 0);
   stopWork(state, now);
+  if (needsDecision) (day.overtimeDecisions ??= []).push({ id: uid(), sessions: indexes, clockOutAt: now, kind: decision.kind, amount: decision.amount });
   const stats = dayStats(state, key, now), time = new Date(now);
   const deltaMinutes = Math.floor(now / 60000) - Math.floor(at(key, day.settings.end) / 60000);
-  day.summary = { clockOutAt: now, date: key, status: deltaMinutes < 0 ? 'early' : deltaMinutes > 0 ? 'late' : 'ontime', sessionCount: day.sessions.length, earned: stats.earned, expenses: stats.expenses, fixed: stats.fixed, net: stats.net, fish: stats.fish, overtime: stats.overtime, actual: stats.actual, hourly: stats.hourly, scheduledEnd: day.settings.end };
+  day.summary = { clockOutAt: now, date: key, status: deltaMinutes < 0 ? 'early' : deltaMinutes > 0 ? 'late' : 'ontime', sessionCount: day.sessions.length, earned: stats.earned, overtimePay: stats.overtimePay, expenses: stats.expenses, fixed: stats.fixed, net: stats.net, fish: stats.fish, overtime: stats.overtime, actual: stats.actual, hourly: stats.hourly, scheduledEnd: day.settings.end };
   return day.summary;
+}
+export function correctStartTime(state, record, now = Date.now()) {
+  const key = record?.date, index = record?.sessionIndex, start = record?.start;
+  if (!finite(now) || !isDateKey(key) || key < state.trackingStart || key > dateKey(new Date(now))) throw Error('请选择已记录的上班日期');
+  const day = state.days[key];
+  if (!day?.sessions.length) throw Error('这一天还没有上班记录，请先点击开始上班');
+  if (!Number.isInteger(index) || index < 0 || index >= day.sessions.length) throw Error('请选择要修正的上班时段');
+  if (!finite(start) || dateKey(new Date(start)) !== dateKey(new Date(day.sessions[index].start))) throw Error('上班时间须在这一段原记录的日期内，不能移到其他日期');
+  if (start > now) throw Error('实际上班时间不能晚于现在');
+  const session = day.sessions[index];
+  if (session.end !== null && start > session.end) throw Error('上班时间不能晚于这一段的实际下班时间');
+  const before = dayStats(state, key, now);
+  if (start === session.start) return { changed: false, before, after: before };
+  // A correction edits one interval, never appends a paid interval or moves its date.
+  const end = session.end ?? Infinity;
+  for (const [otherKey, otherDay] of Object.entries(state.days)) for (const [otherIndex, other] of otherDay.sessions.entries()) {
+    if (otherKey === key && otherIndex === index) continue;
+    const otherEnd = other.end ?? Infinity;
+    if (end > start && otherEnd > other.start && start < otherEnd && other.start < end) throw Error('修正后会与另一段上班记录重叠，请保留各段真实的起止时间');
+  }
+  const corrected = structuredClone(day), next = { ...state, days: { ...state.days, [key]: corrected } };
+  corrected.sessions[index].start = start;
+  const after = dayStats(next, key, now);
+  if (after.fish > after.worked) throw Error(`修正后上班工时仅 ${Math.floor(after.worked / 60000)} 分钟，少于已记的 ${Math.ceil(after.fish / 60000)} 分钟摸鱼；请先在摸鱼记录中纠错`);
+  (corrected.startCorrections ??= []).push({ id: uid(), sessionIndex: index, from: session.start, to: start, correctedAt: now });
+  if (corrected.summary) {
+    const stats = dayStats(next, key, corrected.summary.clockOutAt);
+    for (const field of ['earned', 'overtimePay', 'fish', 'overtime', 'actual', 'hourly']) corrected.summary[field] = stats[field];
+    corrected.summary.net = stats.earned - corrected.summary.expenses - corrected.summary.fixed;
+    corrected.summary.recalculatedAt = now;
+  }
+  // Refresh only an existing report for this month, preserving its cutoff and shown flag.
+  const month = monthKey(key), saved = state.monthlyReviews?.snapshots[month];
+  if (saved) next.monthlyReviews = { ...state.monthlyReviews, snapshots: { ...state.monthlyReviews.snapshots, [month]: { ...monthlyReport(next, month, saved.asOf), recalculatedAt: now } } };
+  validateState(next);
+  state.days[key] = corrected;
+  if (saved) state.monthlyReviews = next.monthlyReviews;
+  return { changed: true, before, after };
 }
 export function addBreak(state, record, now = Date.now()) {
   const today = dateKey(new Date(now));
-  if (!record || !isDateKey(record.date) || record.date < state.trackingStart || record.date > today || ![10, 20, 30].includes(record.minutes) || typeof record.name !== 'string' || !record.name.trim() || record.name.length > 40) throw Error('请选择有效日期、10/20/30 分钟和事项名称');
+  if (!record || !isDateKey(record.date) || record.date < state.trackingStart || record.date > today || !Number.isInteger(record.minutes) || record.minutes < 1 || record.minutes > 1440 || typeof record.name !== 'string' || !record.name.trim() || record.name.length > 40) throw Error('请填写 1 到 1440 之间的整数分钟、有效日期和事项名称');
   const day = state.days[record.date];
   if (!day?.sessions.length) throw Error('该日期尚未记录计薪工时，请先开始上班');
   const stats = dayStats(state, record.date, now), available = Math.max(0, stats.worked - stats.fish), durationMs = record.minutes * 60000;
   if (durationMs > available) throw Error(`当前可计入 ${Math.floor(available / 60000)} 分 ${Math.floor(available / 1000) % 60} 秒，本次 ${record.minutes} 分钟超出；请选较短时长或稍后添加`);
   (day.breaks ??= []).push({ id: uid(), name: record.name.trim(), durationMs, createdAt: now });
+}
+export const breakDate = (state, now = Date.now()) => activeShift(state, now)?.key ?? dateKey(new Date(now));
+export function addCurrentBreak(state, record, now = Date.now()) {
+  return addBreak(state, { ...record, date: breakDate(state, now) }, now);
 }
 export function deleteBreak(state, date, id) {
   const day = state.days[date];
@@ -190,7 +251,8 @@ export function monthStats(state, key, now = Date.now()) {
   const days = dates.map(d => dayStats(state, d, now));
   const total = field => sum(days.map(d => d[field]));
   const actual = total('actual'), earned = total('earned');
-  return { earned, actual, worked: total('worked'), overtime: total('overtime'), fish: total('fish'), elapsed: total('elapsed'), hourly: actual > 0 ? earned / actual * 3600000 : null, secondly: actual > 0 ? earned / actual * 1000 : null, expenses: total('expenses'), fixed: total('fixed'), net: total('net'), recorded: dates.filter(d => state.days[d]?.sessions.length).length, dates, days };
+  const workedDays = days.filter(day => day.worked > 0).length;
+  return { earned, actual, worked: total('worked'), overtime: total('overtime'), overtimePay: total('overtimePay'), fish: total('fish'), elapsed: total('elapsed'), hourly: actual > 0 ? earned / actual * 3600000 : null, secondly: actual > 0 ? earned / actual * 1000 : null, expenses: total('expenses'), fixed: total('fixed'), net: total('net'), averageDaily: workedDays > 0 ? total('net') / workedDays : null, workedDays, recorded: dates.filter(d => state.days[d]?.sessions.length).length, dates, days };
 }
 export function monthlyReport(state, month, now) {
   if (!/^\d{4}-\d{2}$/.test(month) || !isDateKey(`${month}-01`)) throw Error('月份无效');
@@ -203,7 +265,7 @@ export function monthlyReport(state, month, now) {
     else if (status.status === 'late') lateDays++;
     else if (status.status === 'early') earlyDays++;
   }
-  return { month, asOf: now, earned: stats.earned, expenses: stats.expenses, fixed: stats.fixed, costs: stats.expenses + stats.fixed, net: stats.net, worked: stats.worked, actual: stats.actual, fish: stats.fish, overtime: stats.overtime, hourly: stats.hourly, recorded: stats.recorded, ontimeDays, lateDays, earlyDays, activeDays, provisional: activeDays > 0 || month >= dateKey(new Date(now)).slice(0, 7) };
+  return { month, asOf: now, earned: stats.earned, overtimePay: stats.overtimePay, expenses: stats.expenses, fixed: stats.fixed, costs: stats.expenses + stats.fixed, net: stats.net, worked: stats.worked, actual: stats.actual, fish: stats.fish, overtime: stats.overtime, hourly: stats.hourly, recorded: stats.recorded, ontimeDays, lateDays, earlyDays, activeDays, provisional: activeDays > 0 || month >= dateKey(new Date(now)).slice(0, 7) };
 }
 export function dueMonthlyReview(state, now) {
   const key = dateKey(new Date(now)), month = key.slice(0, 7);
@@ -216,25 +278,63 @@ export function saveMonthlyReview(state, report, automatic = false) {
   state.monthlyReviews.snapshots[report.month] = structuredClone(report);
   if (automatic) state.monthlyReviews.shown[report.month] ??= report.asOf;
 }
-export function goalStats(state, now = Date.now()) {
-  const key = dateKey(new Date(now)), goal = state.goal;
-  const earned = goal.period === 'day' ? dayStats(state, key, now).earned : monthStats(state, key, now).earned;
-  let remaining = Math.max(0, goal.amount - earned);
-  const base = { earned, remaining, progress: Math.min(1, earned / goal.amount) };
-  if (!remaining) return { ...base, eta: now, status: 'done' };
-  const dates = goal.period === 'day' ? [key] : datesInMonth(key).filter(d => d >= key);
-  for (const d of dates) {
-    const s = state.days[d]?.settings ?? state.settings;
-    if (!isWorkday(d, s)) continue;
-    const rate = ratePerMs(d, s);
-    if (!(rate > 0)) continue;
-    for (const [start, end] of windows(d, s)) {
-      const from = Math.max(start, now), available = Math.max(0, end - from) * rate;
-      if (remaining <= available && available > 0) return { ...base, eta: from + remaining / rate, status: 'estimated' };
-      remaining -= available;
-    }
+export function netIncomePool(state, from, now = Date.now()) {
+  const through = dateKey(new Date(now));
+  if (!isDateKey(from) || !isDateKey(through) || from < state.trackingStart || from > through || !finite(now)) throw Error('积累起始日须在已开始记录至今天之间');
+  let earned = 0, costs = 0, days = 0;
+  // Read the ledger, do not add deposits: edits and repeated reads cannot double count.
+  for (let date = localDate(from), end = localDate(through); date <= end; date.setDate(date.getDate() + 1)) {
+    const stats = dayStats(state, dateKey(date), now);
+    earned += stats.earned; costs += stats.expenses + stats.fixed; days++;
   }
-  return { ...base, eta: null, status: 'unreachable' };
+  return { from, through, earned, costs, net: earned - costs, days };
+}
+function validateGoalInput(goal) {
+  if (!goal || typeof goal.name !== 'string' || !goal.name.trim() || goal.name.length > 40 || !finite(goal.amount) || goal.amount <= 0 || goal.amount > 1e9) throw Error('请填写目标名称和大于 0、至多 10 亿的金额');
+}
+export function migrateGoal(state, now = Date.now()) {
+  if (!state.goal || state.goal.version === 2) return false;
+  validateGoalInput(state.goal);
+  if (!['day', 'month'].includes(state.goal.period)) throw Error('原目标记录无效');
+  const legacy = structuredClone(state.goal), from = dateKey(new Date(now));
+  if (!finite(now) || !isDateKey(from) || from < state.trackingStart) throw Error('目标升级日期无效');
+  state.goalPool = { from, createdAt: now, settlements: [], legacyGoal: legacy };
+  state.goal = { version: 2, id: uid(), name: legacy.name, amount: legacy.amount, createdAt: now, completedAt: null, notifiedAt: null };
+  return true;
+}
+export function saveGoal(state, input, now = Date.now()) {
+  validateGoalInput(input);
+  if (!finite(now) || !isDateKey(dateKey(new Date(now)))) throw Error('目标设定时间无效');
+  if (state.goal && state.goal.version !== 2) throw Error('请先升级旧目标，再修改');
+  const active = state.goal && state.goal.completedAt === null;
+  const goal = active ? { ...state.goal, name: input.name.trim(), amount: input.amount } : { version: 2, id: uid(), name: input.name.trim(), amount: input.amount, createdAt: now, completedAt: null, notifiedAt: null };
+  const goalPool = state.goalPool ?? { from: dateKey(new Date(now)), createdAt: now, settlements: [] };
+  const next = { ...state, goal, goalPool }; validateState(next);
+  state.goal = goal; state.goalPool = goalPool; return goal;
+}
+export function goalStats(state, now = Date.now()) {
+  const goal = state.goal;
+  if (!goal) return { status: 'none', pool: 0, earned: 0, remaining: 0, progress: 0 };
+  if (goal.version !== 2) return { status: 'legacy', pool: 0, earned: 0, remaining: goal.amount, progress: 0 };
+  const ledger = netIncomePool(state, state.goalPool.from, now);
+  const settled = sum(state.goalPool.settlements.map(entry => entry.amount)), pool = ledger.net - settled;
+  const done = goal.completedAt !== null;
+  return { ...ledger, pool, earned: pool, settled, remaining: done ? 0 : Math.max(0, goal.amount - pool), progress: done ? 1 : Math.min(1, pool / goal.amount), status: done ? 'done' : pool >= goal.amount ? 'ready' : 'saving' };
+}
+export function settleGoal(state, now = Date.now()) {
+  const goal = state.goal;
+  if (!goal || goal.version !== 2 || goal.completedAt !== null) return null;
+  const stats = goalStats(state, now); if (stats.pool < goal.amount) return null;
+  const entry = { id: uid(), goalId: goal.id, name: goal.name, amount: goal.amount, settledAt: now, poolBefore: stats.pool };
+  state.goalPool.settlements.push(entry); goal.completedAt = now;
+  return entry;
+}
+export function dueGoalNotice(state) {
+  return state.goal?.version === 2 && state.goal.completedAt !== null && state.goal.notifiedAt === null ? { id: state.goal.id, name: state.goal.name, amount: state.goal.amount } : null;
+}
+export function markGoalNotified(state, id, now = Date.now()) {
+  if (dueGoalNotice(state)?.id !== id || !finite(now)) return false;
+  state.goal.notifiedAt = now; return true;
 }
 export function addExpense(state, expense) {
   if (!expense || !isDateKey(expense.date) || !finite(expense.amount) || expense.amount <= 0 || expense.amount > 1e9 || typeof expense.name !== 'string' || !expense.name.trim() || expense.name.length > 40) throw Error('请填写有效日期、名称和大于 0 的金额');
@@ -268,15 +368,32 @@ export function validateState(state) {
   if (!state || state.version !== 1 || !isDateKey(state.trackingStart)) throw Error('本地记录版本或日期无效');
   validateSettings(state.settings);
   if (!['today', 'month', 'goal', 'hidden'].includes(state.display)) throw Error('金额显示模式无效');
-  if (!state.goal || typeof state.goal.name !== 'string' || !state.goal.name.trim() || state.goal.name.length > 40 || !finite(state.goal.amount) || state.goal.amount <= 0 || state.goal.amount > 1e9 || !['day', 'month'].includes(state.goal.period)) throw Error('赚钱目标无效');
+  if (state.goal !== null) {
+    validateGoalInput(state.goal);
+    if (state.goal.version === 2) {
+      const g = state.goal, pool = state.goalPool;
+      if (typeof g.id !== 'string' || !g.id || !finite(g.createdAt) || (g.completedAt !== null && !finite(g.completedAt)) || (g.notifiedAt !== null && (!finite(g.notifiedAt) || g.completedAt === null))) throw Error('目标状态无效');
+      if (!pool || !isDateKey(pool.from) || pool.from < state.trackingStart || !finite(pool.createdAt) || !Array.isArray(pool.settlements) || pool.settlements.length > 10000 || pool.settlements.some(e => !e || typeof e.id !== 'string' || typeof e.goalId !== 'string' || typeof e.name !== 'string' || !e.name.trim() || e.name.length > 40 || !finite(e.amount) || e.amount <= 0 || e.amount > 1e9 || !finite(e.settledAt) || !finite(e.poolBefore) || e.poolBefore < e.amount) || new Set(pool.settlements.map(e => e.goalId)).size !== pool.settlements.length) throw Error('目标积累池记录无效');
+      const entry = pool.settlements.find(e => e.goalId === g.id);
+      if ((g.completedAt === null && entry) || (g.completedAt !== null && (!entry || entry.amount !== g.amount || entry.settledAt !== g.completedAt))) throw Error('目标结算状态不一致');
+      if (pool.legacyGoal) { validateGoalInput(pool.legacyGoal); if (!['day', 'month'].includes(pool.legacyGoal.period)) throw Error('原目标记录无效'); }
+    } else if (!['day', 'month'].includes(state.goal.period)) throw Error('赚钱目标无效');
+  }
   if (!state.days || typeof state.days !== 'object' || Object.keys(state.days).length > 20000 || !Array.isArray(state.expenses) || !Array.isArray(state.fixed) || state.expenses.length > 100000 || state.fixed.length > 10000) throw Error('本地记录结构无效');
   for (const [key, day] of Object.entries(state.days)) {
     if (!isDateKey(key) || key < state.trackingStart) throw Error('打卡日期无效');
     validateSettings(day.settings);
     for (const list of [day.sessions, day.fish]) {
-      if (!Array.isArray(list) || list.length > 10000 || list.some(i => !finite(i.start) || (i.end !== null && (!finite(i.end) || i.end < i.start)) || i.start < at(key, '00:00') || i.start >= at(dateKey(new Date(localDate(key).getTime() + 36e5 * 36)), '00:00'))) throw Error('计时记录无效');
+      if (!Array.isArray(list) || list.length > 10000 || list.some(i => !finite(i.start) || (i.end !== null && (!finite(i.end) || i.end < i.start)) || i.start < at(key, '00:00') || (i.start >= at(dateKey(new Date(localDate(key).getTime() + 36e5 * 36)), '00:00') && !(list === day.sessions && i.resumed === true)))) throw Error('计时记录无效');
     }
     if (day.breaks !== undefined && (!Array.isArray(day.breaks) || day.breaks.length > 10000 || day.breaks.some(r => !r || typeof r.id !== 'string' || typeof r.name !== 'string' || !r.name.trim() || r.name.length > 40 || !finite(r.durationMs) || r.durationMs <= 0 || !finite(r.createdAt)))) throw Error('摸鱼时长记录无效');
+    if (day.startCorrections !== undefined && (!Array.isArray(day.startCorrections) || day.startCorrections.length > 10000 || day.startCorrections.some(r => !r || typeof r.id !== 'string' || !Number.isInteger(r.sessionIndex) || r.sessionIndex < 0 || r.sessionIndex >= day.sessions.length || !finite(r.from) || !finite(r.to) || dateKey(new Date(r.from)) < key || dateKey(new Date(r.from)) !== dateKey(new Date(r.to)) || !finite(r.correctedAt)))) throw Error('上班修正记录无效');
+    if (day.overtimeDecisions !== undefined) {
+      const decisions = day.overtimeDecisions, indexes = Array.isArray(decisions) ? decisions.flatMap(entry => entry?.sessions ?? []) : [];
+      if (!Array.isArray(decisions) || decisions.length > 10000 || decisions.some(entry => !entry || typeof entry.id !== 'string' || !finite(entry.clockOutAt) || !['free', 'paid'].includes(entry.kind) || !finite(entry.amount) || entry.amount < 0 || entry.amount > 1e9 || (entry.kind === 'free' ? entry.amount !== 0 : entry.amount <= 0) || !Array.isArray(entry.sessions) || !entry.sessions.length || entry.sessions.some(index => !Number.isInteger(index) || index < 0 || index >= day.sessions.length || day.sessions[index].end !== entry.clockOutAt)) || new Set(indexes).size !== indexes.length) throw Error('加班费记录无效');
+    }
+    if (day.summary?.recalculatedAt !== undefined && !finite(day.summary.recalculatedAt)) throw Error('总结重算时间无效');
+    if (day.summary?.overtimePay !== undefined && (!finite(day.summary.overtimePay) || day.summary.overtimePay < 0)) throw Error('总结加班费无效');
     if (day.summary && (!finite(day.summary.clockOutAt) || day.summary.date !== key || !['early', 'ontime', 'late'].includes(day.summary.status) || !Number.isInteger(day.summary.sessionCount) || !['earned', 'expenses', 'fixed', 'net', 'fish', 'actual'].every(field => finite(day.summary[field])) || (day.summary.hourly !== null && !finite(day.summary.hourly)) || !validTime(day.summary.scheduledEnd))) throw Error('下班总结无效');
   }
   for (const e of state.expenses) {
@@ -295,6 +412,8 @@ export function validateState(state) {
   if (state.monthlyReviews !== undefined) {
     const reviews = state.monthlyReviews;
     if (!reviews || !reviews.shown || !reviews.snapshots || Object.entries(reviews.shown).some(([key, stamp]) => !/^\d{4}-\d{2}$/.test(key) || !finite(stamp)) || Object.entries(reviews.snapshots).some(([key, report]) => report?.month !== key || !finite(report.asOf) || !['earned', 'expenses', 'fixed', 'costs', 'net', 'worked', 'actual', 'fish', 'overtime'].every(field => finite(report[field])) || (report.hourly !== null && !finite(report.hourly)))) throw Error('月报记录无效');
+    if (Object.values(reviews.snapshots).some(report => report.recalculatedAt !== undefined && !finite(report.recalculatedAt))) throw Error('月报重算时间无效');
+    if (Object.values(reviews.snapshots).some(report => report.overtimePay !== undefined && (!finite(report.overtimePay) || report.overtimePay < 0))) throw Error('月报加班费无效');
   }
   return state;
 }
@@ -305,7 +424,7 @@ export function demoState(wall = Date.now()) {
   state.onboarded = true;
   state.demo = { time: now, wall };
   state.trackingStart = '2026-11-01';
-  state.goal = { name: '给自己一副新耳机', amount: 1500, period: 'month' };
+  saveGoal(state, { name: '给自己一副新耳机', amount: 1500 }, at('2026-11-01', '09:00'));
   for (const d of ['2026-11-02', key]) {
     const day = getDay(state, d, true);
     day.sessions.push({ start: at(d, '09:00'), end: d === key ? null : at(d, '18:00') });

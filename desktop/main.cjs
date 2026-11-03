@@ -40,7 +40,7 @@ handle('window:tray', async state => {
   return { mode: 'tray', nativeBounds: statusBar.tray.getBounds() };
 });
 async function createWindow() {
-  win = new BrowserWindow({ width: 1220, height: 930, minWidth: 760, minHeight: 650, useContentSize: true, title: '窝囊费', backgroundColor: '#f7f7f2', show: false, autoHideMenuBar: true, webPreferences: { preload: path.join(__dirname, 'preload.cjs'), nodeIntegration: false, contextIsolation: true, sandbox: true, spellcheck: false, webSecurity: true } });
+  win = new BrowserWindow({ width: 1220, height: 930, minWidth: 760, minHeight: 650, useContentSize: true, title: '窝囊费', icon: path.join(root, 'src/app-icon.png'), backgroundColor: '#f7f8fa', show: false, autoHideMenuBar: true, webPreferences: { preload: path.join(__dirname, 'preload.cjs'), nodeIntegration: false, contextIsolation: true, sandbox: true, spellcheck: false, webSecurity: true } });
   win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   win.webContents.on('will-navigate', event => event.preventDefault());
   win.webContents.on('will-attach-webview', event => event.preventDefault());
@@ -64,6 +64,7 @@ async function createWindow() {
   }
 }
 app.whenReady().then(async () => {
+  if (process.platform === 'darwin') app.dock?.setIcon(path.join(root, 'src/app-icon.png'));
   session.defaultSession.setPermissionRequestHandler((_wc, _permission, callback) => callback(false));
   session.defaultSession.setPermissionCheckHandler(() => false);
   session.defaultSession.webRequest.onBeforeRequest({ urls: ['*://*/*', 'ws://*/*', 'wss://*/*'] }, (_details, callback) => callback({ cancel: true }));

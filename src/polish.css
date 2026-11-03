@@ -170,3 +170,47 @@ dialog{border-color:#e5e1d3;box-shadow:0 18px 70px #304d3b28}
   .purchase-card>strong{font-size:18px}
 }
 @media(max-width:760px){.hero-description{max-width:100%}}
+
+/* Actual clock-in is distinct from the scheduled clock-out countdown. */
+.shift-card .countdown{margin-bottom:7px}
+.recorded-start-row{display:flex;align-items:center;gap:12px;margin:0 0 12px;min-height:24px;color:#718471;font-size:11px;font-variant-numeric:tabular-nums}
+.recorded-start-row .text-button{color:#347b57;font-size:11px;padding:3px 7px;border:1px solid #d7e5d5;border-radius:6px;background:#f0f6e9;min-height:26px}
+#calendar-correct-start{display:block;margin-top:8px;color:#347b57}
+#correction-dialog{width:520px;background:#fffdf6}
+#correction-dialog .dialog-heading{margin-bottom:12px}
+#correction-dialog .eyebrow{display:block;font-size:10px;color:#83927b;margin-bottom:7px}
+#correction-dialog .tag{display:inline-block;margin:0 0 19px}
+#correction-dialog .form-grid{grid-template-columns:1fr 1fr;gap:14px}
+#correction-dialog label{margin-bottom:13px}
+.correction-preview{display:grid;grid-template-columns:1fr 1fr;gap:15px;padding:16px;background:#edf4e7;border:1px solid #dfe9d7;border-radius:12px;margin:15px 0}
+.correction-preview>div{display:flex;flex-direction:column;gap:8px;min-width:0}
+.correction-preview>div>span{font-size:10px;color:#74846c}
+.correction-preview b{font-size:24px;font-weight:600;font-variant-numeric:tabular-nums;overflow-wrap:anywhere;color:#395b41}
+.correction-preview>div:nth-child(2)>b{color:var(--wn-orange)}
+.correction-preview small{font-size:10px;color:#73866c;font-variant-numeric:tabular-nums}
+.correction-preview>p{grid-column:1/3;margin:0;padding-top:10px;border-top:1px dashed #ceddc7;font-size:11px;color:#547448}
+#correction-dialog .confirm-actions{margin:18px 0 0}
+#correction-dialog .correction-history{margin:15px 0 0;color:#83917c;font-size:10px}
+#correction-dialog .form-error{font-size:12px}
+@media(max-width:480px){#correction-dialog{padding:20px}.correction-preview b{font-size:21px}#correction-dialog .form-grid{grid-template-columns:1fr;gap:0}}
+.break-duration{display:flex;align-items:center;justify-content:center;gap:18px;margin-bottom:13px}
+.break-duration>button{width:44px;height:44px;border:1px solid #cbdcc5;border-radius:12px;background:#eff5e9;color:#39734d;font-size:24px;touch-action:none;user-select:none}
+.break-duration>button:focus-visible{outline:3px solid #e4b36b;outline-offset:3px}
+.break-duration-input{display:flex;flex-direction:row;align-items:baseline;gap:5px;margin:0}
+.break-duration-input input{width:90px;padding:7px 2px;text-align:center;font-size:30px;font-weight:600;color:#34694c;font-variant-numeric:tabular-nums;background:#fffdf6}
+.break-duration-input input::-webkit-inner-spin-button,.break-duration-input input::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}
+.break-duration-input span{font-size:13px;color:#7f9374}
+.section-actions{display:flex;gap:8px;align-items:center;flex-shrink:0}
+.quick-fixed-button{display:grid;place-items:center;width:30px;height:30px;border:1px solid #d7e5d5;border-radius:8px;background:#eef5e8;color:#347b57;font-size:21px;padding:0}
+.quick-fixed-button:focus-visible{outline:3px solid #e4b36b;outline-offset:3px}
+#goal-complete-dialog p{font-size:13px;line-height:1.8;color:#6d8067}
+.salary-rates{display:flex;flex-wrap:wrap;gap:8px 16px;align-items:baseline;max-width:100%;font-variant-numeric:tabular-nums}
+.salary-rates>span{display:flex;align-items:baseline;gap:5px}
+.salary-rates small{font-size:10px;font-weight:400;color:#7f8e78}
+.salary-rates b{font-size:13px;font-weight:600;color:#5b795b}
+.hero-bottom{position:relative;z-index:2}
+.overtime-mode #countdown,.overtime-mode #shift-label-text,.overtime-mode #mini-time-value,.overtime-mode #mini-time-label,.overtime-ended #countdown,.overtime-ended #shift-label-text{color:#bd3c36!important}
+.overtime-mode .shift-card{border-color:#e6b7a8;background:linear-gradient(125deg,#fff7f0,#fce9df)}
+#calendar-rework{margin-top:12px;width:100%}
+#overtime-fee-dialog .confirm-actions{margin:20px 0}
+#overtime-fee-dialog .fine-print{margin-top:12px}

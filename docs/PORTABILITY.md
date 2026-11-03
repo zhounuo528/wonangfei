@@ -12,4 +12,4 @@ Electron 主进程使用 CommonJS，通过 `contextBridge` 与 IPC 提供 `windo
 
 微信小程序可复用经过适配的纯计算逻辑，界面要重写为 WXML/WXSS、组件和小程序事件：DOM 查询、FormData、HTML dialog、直接 progress 更新等不能原样搬用。持久化需改为小程序本地存储并考虑限额、备份和多端口径；生命周期改为 onShow/onHide，减少频繁 setData，继续按时间戳恢复。还需检查 `Intl.NumberFormat`、`structuredClone`、`crypto.randomUUID` 的基础库兼容性并提供适配。窗口置顶、原生 Tray 没有对应形态；提醒需依据平台允许的通知能力设计。
 
-代码依据：[前端入口](../src/app.mjs)、[计算核心](../src/model.mjs)、[桥接 API](../desktop/preload.cjs)、[桌面窗口与数据路径](../desktop/main.cjs)、[存储实现](../desktop/storage.cjs)。
+代码依据：[前端入口](src/app.mjs)、[计算核心](src/model.mjs)、[桥接 API](desktop/preload.cjs)、[桌面窗口与数据路径](desktop/main.cjs)、[存储实现](desktop/storage.cjs)。

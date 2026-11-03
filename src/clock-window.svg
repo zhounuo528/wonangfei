@@ -1,14 +1,14 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 132 114" fill="none">
-<defs><linearGradient id="sky" x1="16" y1="8" x2="104" y2="99"><stop stop-color="#ffc796"/><stop offset="1" stop-color="#ffe9c8"/></linearGradient></defs>
+<defs><linearGradient id="sky" x1="16" y1="8" x2="104" y2="99"><stop stop-color="#c6e6e3"/><stop offset="1" stop-color="#edf7f6"/></linearGradient></defs>
 <rect x="16" y="7" width="101" height="84" rx="21" fill="url(#sky)"/>
-<circle cx="75" cy="60" r="17" fill="#fff2c9"/>
-<path d="M18 73h17V58h14v15h12V65h14v15h16V63h13v12h12v14H18V73Z" fill="#b8b5bb" opacity=".62"/>
-<path d="M27 9v81M106 10v80M17 29h99M67 8v81" stroke="#afa398" stroke-width="2.6" stroke-linecap="round"/>
-<path d="m36 44 11 3M85 36l8 2" stroke="#fff5df" stroke-width="1.7" stroke-linecap="round"/>
-<path d="M7 95h116" stroke="#ddcbb1" stroke-width="4" stroke-linecap="round"/>
-<path d="m31 82-10 26h31l-6-26H31Z" fill="#fffaf0" stroke="#b7976d" stroke-width="2"/>
-<path d="M26 88h19M33 79v8M40 79v8" stroke="#b7976d" stroke-width="2" stroke-linecap="round"/>
-<path d="m30 97 4 4 8-8" stroke="#68b38b" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
-<path d="M98 94c-1-20 5-30 13-40M99 81c-16-1-21-12-20-22 15 3 22 10 20 22ZM101 74c-1-15 8-24 19-27 0 16-7 24-19 27Z" fill="#8fc8a0"/>
-<path d="M91 91h20l-3 16H94l-3-16Z" fill="#e6b98b"/>
+<circle cx="75" cy="60" r="17" fill="#e6f8f3"/>
+<path d="M18 73h17V58h14v15h12V65h14v15h16V63h13v12h12v14H18V73Z" fill="#b0cad2" opacity=".62"/>
+<path d="M27 9v81M106 10v80M17 29h99M67 8v81" stroke="#9ccbc9" stroke-width="2.6" stroke-linecap="round"/>
+<path d="m36 44 11 3M85 36l8 2" stroke="#f8ffff" stroke-width="1.7" stroke-linecap="round"/>
+<path d="M7 95h116" stroke="#b7d9d6" stroke-width="4" stroke-linecap="round"/>
+<path d="m31 82-10 26h31l-6-26H31Z" fill="#fbfdfd" stroke="#84b7b3" stroke-width="2"/>
+<path d="M26 88h19M33 79v8M40 79v8" stroke="#84b7b3" stroke-width="2" stroke-linecap="round"/>
+<path d="m30 97 4 4 8-8" stroke="#2aac8b" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M98 94c-1-20 5-30 13-40M99 81c-16-1-21-12-20-22 15 3 22 10 20 22ZM101 74c-1-15 8-24 19-27 0 16-7 24-19 27Z" fill="#67c5a4"/>
+<path d="M91 91h20l-3 16H94l-3-16Z" fill="#c3c6b4"/>
 </svg>

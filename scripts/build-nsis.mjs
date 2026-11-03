@@ -3,9 +3,11 @@ import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {execFileSync} from 'node:child_process';
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
-const payload=path.join(root,'dist-installers/payload/Wonangfei-win32-x64');
+const {version}=JSON.parse(await fs.readFile(path.join(root,'package.json'),'utf8'));
+const output=path.join(root,`dist-release/v${version}`);
+const payload=path.join(output,'payload/Wonangfei-win32-x64');
 const compiler=path.join(root,'.installer-tools/nsis-bundle/makensis');
-const installer=path.join(root,'dist-installers/Wonangfei-Setup-0.2.1-x64.exe');
+const installer=path.join(output,`Wonangfei-Setup-${version}-x64.exe`);
 try{await fs.access(installer);throw Error('安装包已存在，停止覆盖');}catch(error){if(error.code!=='ENOENT')throw error;}
 async function walk(dir,relative=''){
   const files=[],dirs=[];
@@ -28,6 +30,8 @@ const script=String.raw`Unicode true
 !include "x64.nsh"
 Name "窝囊费"
 OutFile "${installer}"
+Icon "${path.join(root,'src/icons/Wonangfei.ico')}"
+UninstallIcon "${path.join(root,'src/icons/Wonangfei.ico')}"
 InstallDir "$LOCALAPPDATA\Programs\Wonangfei"
 InstallDirRegKey HKCU "Software\WonangfeiTrial" "InstallDir"
 RequestExecutionLevel user
@@ -36,11 +40,11 @@ SetCompressorDictSize 32
 CRCCheck force
 ManifestDPIAware true
 ManifestSupportedOS all
-VIProductVersion "0.2.1.0"
+VIProductVersion "${version}.0"
 VIAddVersionKey "ProductName" "窝囊费"
 VIAddVersionKey "FileDescription" "窝囊费 安装程序（x64）"
-VIAddVersionKey "FileVersion" "0.2.1"
-VIAddVersionKey "ProductVersion" "0.2.1"
+VIAddVersionKey "FileVersion" "${version}"
+VIAddVersionKey "ProductVersion" "${version}"
 VIAddVersionKey "LegalCopyright" "Wonangfei"
 !define MUI_ABORTWARNING
 !define MUI_WELCOMEPAGE_TITLE "欢迎安装窝囊费"
@@ -105,14 +109,14 @@ Section "窝囊费" Main
   SetOverwrite on
   File /r "${payload}/*"
   WriteINIStr "$INSTDIR\Wonangfei.install.ini" "App" "Id" "local.wonangfei.trial"
-  WriteINIStr "$INSTDIR\Wonangfei.install.ini" "App" "Version" "0.2.1"
+  WriteINIStr "$INSTDIR\Wonangfei.install.ini" "App" "Version" "${version}"
   WriteUninstaller "$INSTDIR\Uninstall.exe"
   CreateDirectory "$SMPROGRAMS\窝囊费"
   CreateShortCut "$SMPROGRAMS\窝囊费\窝囊费.lnk" "$INSTDIR\Wonangfei.exe"
   CreateShortCut "$SMPROGRAMS\窝囊费\卸载窝囊费.lnk" "$INSTDIR\Uninstall.exe"
   WriteRegStr HKCU "Software\WonangfeiTrial" "InstallDir" "$INSTDIR"
   WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\WonangfeiTrial" "DisplayName" "窝囊费"
-  WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\WonangfeiTrial" "DisplayVersion" "0.2.1"
+  WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\WonangfeiTrial" "DisplayVersion" "${version}"
   WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\WonangfeiTrial" "Publisher" "Wonangfei"
   WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\WonangfeiTrial" "InstallLocation" "$INSTDIR"
   WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\WonangfeiTrial" "DisplayIcon" "$INSTDIR\Wonangfei.exe"
@@ -141,8 +145,9 @@ ${directories}
   DeleteRegKey HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\WonangfeiTrial"
 SectionEnd
 `;
-const scriptPath=path.join(root,'dist-installers/Wonangfei-0.2.1.nsi');
+const scriptPath=path.join(output,`Wonangfei-${version}.nsi`);
 await fs.writeFile(scriptPath,'\uFEFF'+script);
-await fs.writeFile(path.join(root,'evidence/installers/windows-payload-inventory.json'),JSON.stringify(inventory,null,2));
+await fs.mkdir(path.join(root,`evidence/release-${version}`),{recursive:true});
+await fs.writeFile(path.join(root,`evidence/release-${version}/windows-payload-inventory.json`),JSON.stringify(inventory,null,2));
 execFileSync(compiler,['-V3',scriptPath],{stdio:'inherit'});
-console.log(JSON.stringify({installer,version:'0.2.1',appArch:'x64',installerBootstrap:'x86 Unicode NSIS',perUser:true,administratorRequired:false,authenticode:false,windowsRuntimeTested:false,uninstall:'explicit installed-file list; no recursive folder deletion; app data retained'},null,2));
+console.log(JSON.stringify({installer,version,appArch:'x64',installerBootstrap:'x86 Unicode NSIS',perUser:true,administratorRequired:false,authenticode:false,windowsRuntimeTested:false,uninstall:'explicit installed-file list; no recursive folder deletion; app data retained'},null,2));

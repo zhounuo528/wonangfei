@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { emptyState, demoState, dateKey, at, validateSettings, validateState, startWork, stopWork, activeShift, clockOut, addBreak, deleteBreak, dueReminder, markReminderDelivered, attendanceStatus, monthlyReport, dueMonthlyReview, saveMonthlyReview, isWorkday, datesInMonth, expenseForDate, convertLegacyFixed, settle, dayStats, monthStats, goalStats, addFixed, fixedForDate, fixedItemForDate, clockNow, addExpense } from '../src/model.mjs';
+import { emptyState, demoState, dateKey, at, validateSettings, validateState, startWork, stopWork, activeShift, clockOut, addBreak, deleteBreak, dueReminder, markReminderDelivered, attendanceStatus, monthlyReport, dueMonthlyReview, saveMonthlyReview, saveGoal, settleGoal, isWorkday, datesInMonth, expenseForDate, convertLegacyFixed, settle, dayStats, monthStats, goalStats, addFixed, fixedForDate, fixedItemForDate, clockNow, addExpense } from '../src/model.mjs';
 const key = '2026-11-03';
 const stateFor = () => { const s = emptyState(new Date(at(key, '08:00'))); s.settings.salary = 17600; s.settings.payDays = 22; return s; };
 const close = (a, b) => assert.ok(Math.abs(a - b) < 1e-7, `${a} ≈ ${b}`);
@@ -58,18 +58,16 @@ test('fixed burdens include unrecorded elapsed days but never future days or dat
   const s = stateFor(); s.trackingStart = '2026-11-01'; addFixed(s, { name: '房租', amount: 2100, period: 'month', allocation: 'workday' }, '2026-11-01');
   close(monthStats(s, key, at(key, '14:00')).fixed, 200); close(fixedForDate(s, '2026-10-31'), 0);
 });
-test('goals return precise lunch-aware estimates, done, unreachable and zero salary', () => {
-  const s = stateFor(); startWork(s, at(key, '09:00')); s.goal = { name: '今日', amount: 400, period: 'day' };
-  let g = goalStats(s, at(key, '11:00')); assert.equal(g.status, 'estimated'); assert.equal(g.eta, at(key, '14:00')); close(g.remaining, 200);
-  s.goal.amount = 900; assert.equal(goalStats(s, at(key, '11:00')).status, 'unreachable');
-  s.goal.amount = 100; assert.equal(goalStats(s, at(key, '11:00')).status, 'done');
-  s.goal.amount = 1000; s.goal.period = 'month'; assert.equal(goalStats(s, at(key, '11:00')).eta, at('2026-11-04', '11:00'));
-  s.settings.salary = 0; s.days[key].settings.salary = 0; assert.equal(goalStats(s, at(key, '11:00')).status, 'unreachable');
+test('unlimited goal uses net income and keeps signed losses instead of a day/month deadline', () => {
+  const s = stateFor(); saveGoal(s, {name:'新目标', amount:400}, at(key,'09:00')); startWork(s,at(key,'09:00'));
+  s.expenses.push({id:'cost',name:'成本',date:key,amount:300});
+  const g=goalStats(s,at(key,'11:00')); close(g.pool,-100); close(g.remaining,500); assert.equal(g.status,'saving');
+  assert.equal(g.progress,-0.25); assert.equal(g.eta,undefined);
 });
-test('month goal estimate never crosses its month, weekend rolls to next configured workday', () => {
-  const s = stateFor(); s.goal = { name: '大目标', amount: 1000000, period: 'month' };
-  assert.equal(goalStats(s, at('2026-11-30', '17:00')).status, 'unreachable');
-  s.goal.amount = 100; assert.equal(goalStats(s, at('2026-11-07', '09:00')).eta, at('2026-11-09', '10:00'));
+test('unlimited goal carries through month boundary and settles once instead of resetting', () => {
+  const s=stateFor(); saveGoal(s,{name:'新目标',amount:500},at(key,'09:00'));startWork(s,at(key,'09:00'));clockOut(s,at(key,'18:00'));
+  assert.equal(goalStats(s,at('2026-12-01','09:00')).pool,800); settleGoal(s,at('2026-12-01','09:00'));
+  assert.equal(goalStats(s,at('2026-12-01','09:00')).pool,300); assert.equal(settleGoal(s,at('2026-12-01','10:00')),null);
 });
 test('reject invalid zero shifts, overnight, invalid weekdays, lunch and pay days', () => {
   const s = stateFor().settings;
@@ -92,7 +90,7 @@ test('manual break presets enforce paid-time capacity without truncating, deleti
   for (const minutes of [10, 20, 30]) addBreak(s, { date: key, minutes, name: minutes === 30 ? '自定义打个盹' : '喝点水' }, at(key, '11:00'));
   let d = dayStats(s, key, at(key, '11:00')); close(d.fish, 3600000); close(d.earned, 200); close(d.hourly, 200);
   deleteBreak(s, key, s.days[key].breaks[0].id); d = dayStats(s, key, at(key, '11:00')); close(d.fish, 3000000); close(d.earned, 200);
-  assert.throws(() => addBreak(s, { date: key, minutes: 15, name: 'x' }, at(key, '11:00')));
+  assert.throws(() => addBreak(s, { date: key, minutes: 0, name: 'x' }, at(key, '11:00')));
   validateState(s);
 });
 test('manual break records persist through sleep and month totals agree with date totals', () => {
@@ -148,13 +146,13 @@ test('overnight open shift restores once, stays with its start date and accepts 
   assert.equal(activeShift(s, stamp).key, key); close(dayStats(s, key, stamp).overtime, 7 * 3600000); close(dayStats(s, '2026-11-04', stamp).earned, 0);
   assert.throws(() => startWork(s, stamp), /上一班次/);
   addBreak(s, { date: key, minutes: 30, name: '加班喝水' }, stamp);
-  const summary = clockOut(s, stamp); assert.equal(summary.date, key); assert.equal(summary.status, 'late'); close(summary.earned, 800); close(summary.actual, 14.5 * 3600000);
+  const summary = clockOut(s, stamp, {kind:'free',amount:0}); assert.equal(summary.date, key); assert.equal(summary.status, 'late'); close(summary.earned, 800); close(summary.actual, 14.5 * 3600000);
   assert.equal(activeShift(s, stamp), null); validateState(s);
 });
 test('overnight at month boundary never transfers old wages or break records to the new month', () => {
   const s = emptyState(new Date(at('2026-10-30', '08:00'))); startWork(s, at('2026-10-30', '09:00'));
   const stamp = at('2026-11-01', '01:00'); close(monthStats(s, '2026-11-01', stamp).earned, 0);
-  const summary = clockOut(s, stamp); assert.equal(summary.date, '2026-10-30'); assert.ok(summary.overtime > 0); assert.equal(summary.status, 'late');
+  const summary = clockOut(s, stamp, {kind:'free',amount:0}); assert.equal(summary.date, '2026-10-30'); assert.ok(summary.overtime > 0); assert.equal(summary.status, 'late');
 });
 test('reminder defaults off, records delivery before repeat, survives reload and re-enabling', () => {
   let s = stateFor(); assert.equal(dueReminder(s, at(key, '18:00')), null);

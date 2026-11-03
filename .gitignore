@@ -31,3 +31,10 @@ screenshots/
 *.log
 *.tmp
 .DS_Store
+dist-release/
+.release-build-input*/
+references/
+reference/
+deliverables/
+!docs/screenshots/
+!docs/screenshots/*.png
