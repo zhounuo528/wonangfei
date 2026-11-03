@@ -1,0 +1,13 @@
+const { contextBridge, ipcRenderer } = require('electron');
+contextBridge.exposeInMainWorld('workday', Object.freeze({
+  load: () => ipcRenderer.invoke('state:load'),
+  loadReal: () => ipcRenderer.invoke('state:real'),
+  save: state => ipcRenderer.invoke('state:save', state),
+  exportData: state => ipcRenderer.invoke('state:export', state),
+  pin: enabled => ipcRenderer.invoke('window:pin', enabled),
+  windowMode: mini => ipcRenderer.invoke('window:mode', mini),
+  collapseToTray: state => ipcRenderer.invoke('window:tray', state),
+  onPresentation: callback => { if (typeof callback === 'function') ipcRenderer.on('window:presentation', (_event, mode) => callback(mode)); },
+  onAction: callback => { if (typeof callback === 'function') ipcRenderer.on('app:action', (_event, action) => callback(action)); },
+  onVisibility: callback => { if (typeof callback !== 'function') return; ipcRenderer.on('window:visibility', (_event, visible) => callback(visible === true)); }
+}));
