@@ -1,6 +1,7 @@
+import { legacyStartWork as startWork } from './fixtures.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { emptyState, at, startWork, clockOut, correctStartTime, addExpense, addFixed, netIncomePool, validateState } from '../src/model.mjs';
+import { emptyState, at,  clockOut, correctStartTime, addExpense, addFixed, netIncomePool, validateState } from '../src/model.mjs';
 const key = '2026-11-03';
 function fixture() { const s = emptyState(new Date(at(key,'08:00'))); s.settings.salary=17600; s.settings.payDays=22; delete s.settings.payDaysMode; delete s.settings.payDaysMonth; return s; }
 test('net pool includes creation day loss and next day profit: -100 plus 300 equals 200, with no repeated accumulation', () => {

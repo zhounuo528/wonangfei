@@ -1,6 +1,7 @@
+import { legacyStartWork as startWork } from './fixtures.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { emptyState, at, startWork, clockOut, saveGoal, migrateGoal, goalStats, settleGoal, dueGoalNotice, markGoalNotified, correctStartTime, validateState } from '../src/model.mjs';
+import { emptyState, at,  clockOut, saveGoal, migrateGoal, goalStats, settleGoal, dueGoalNotice, markGoalNotified, correctStartTime, validateState } from '../src/model.mjs';
 const key='2026-11-03';
 function fixture(){const s=emptyState(new Date(at(key,'08:00')));s.settings.salary=17600;s.settings.payDays=22; delete s.settings.payDaysMode; delete s.settings.payDaysMonth;return s;}
 test('signed net pool -100 plus 300 becomes 200; settling 5000 at 5200 carries 200 to the next goal without recounting today',()=>{

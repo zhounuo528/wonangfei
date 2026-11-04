@@ -4,7 +4,7 @@ body{min-width:320px}
 button,input,select{touch-action:manipulation}
 button{min-height:40px}
 input:not([type=checkbox]):not([type=radio]),label>select{font-size:16px}
-.sidebar-demo{display:block!important;min-height:40px}
+
 .data-actions{flex-wrap:wrap;gap:12px}
 .data-actions .muted{flex-basis:100%;line-height:1.7}
 .hero-value{max-width:100%}
@@ -19,7 +19,7 @@ input:not([type=checkbox]):not([type=radio]),label>select{font-size:16px}
   .brand{font-size:23px;margin-right:auto}
   .brand>span:last-child{display:block}
   .brand small{font-size:7px}
-  .sidebar-demo{font-size:11px!important}
+
   nav{order:3;flex-basis:100%;width:100%;margin:4px 0 0;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
   .nav-item{font-size:12px;padding:10px 5px;gap:5px;justify-content:center;white-space:nowrap;min-height:44px}
   .nav-item svg{width:15px;height:15px}

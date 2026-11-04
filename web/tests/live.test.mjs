@@ -1,7 +1,8 @@
+import { legacyStartWork as startWork } from './fixtures.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createTimestampTicker } from '../src/live.mjs';
-import { at, emptyState, startWork, dayStats } from '../src/model.mjs';
+import { at, emptyState,  dayStats } from '../src/model.mjs';
 
 test('smooth presentation reads absolute timestamps; dropped frames, lunch and resume do not change pay', () => {
   const key = '2026-11-03', state = emptyState(new Date(at(key, '08:00')));

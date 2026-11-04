@@ -1,6 +1,7 @@
+import { legacyStartWork as startWork } from './fixtures.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { emptyState, at, startWork, resumeWork, clockOut, needsOvertimeDecision, dayStats, monthStats, monthlyReport, addBreak, correctStartTime, saveGoal, goalStats, validateState } from '../src/model.mjs';
+import { emptyState, at,  resumeWork, clockOut, needsOvertimeDecision, dayStats, monthStats, monthlyReport, addBreak, correctStartTime, saveGoal, goalStats, validateState } from '../src/model.mjs';
 const key='2026-11-03',hour=3600000;
 function fixture(date=key){const s=emptyState(new Date(at(date,'08:00')));s.settings.salary=17600;s.settings.payDays=22; delete s.settings.payDaysMode; delete s.settings.payDaysMonth;return s;}
 const close=(a,b)=>assert.ok(Math.abs(a-b)<1e-7,`${a} ≈ ${b}`);

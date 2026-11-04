@@ -1,9 +1,9 @@
-import { dateKey, at, emptyState, demoState, clockNow, getDay, activeSession, activeShift, settle, startWork, resumeWork, needsOvertimeDecision, clockOut, correctStartTime, breakDate, addCurrentBreak, deleteBreak, dueReminder, markReminderDelivered, attendanceStatus, datesInMonth, dayStats, monthStats, monthlyReport, dueMonthlyReview, saveMonthlyReview, migrateGoal, saveGoal, goalStats, settleGoal, dueGoalNotice, markGoalNotified, fixedItemForDate, addExpense, addFixed, convertLegacyFixed, expenseForDate, validateSettings, validateState, windows, ratePerMs, isWorkday, paidIntervals } from './model.mjs';
+import { dateKey, at, emptyState, clockNow, getDay, activeSession, activeShift, settle, startWork, resumeWork, needsOvertimeDecision, clockOut, correctStartTime, breakDate, addCurrentBreak, deleteBreak, dueReminder, markReminderDelivered, attendanceStatus, datesInMonth, dayStats, monthStats, monthlyReport, dueMonthlyReview, saveMonthlyReview, migrateGoal, saveGoal, goalStats, settleGoal, dueGoalNotice, markGoalNotified, fixedItemForDate, addExpense, addFixed, convertLegacyFixed, expenseForDate, validateSettings, validateState, windows, ratePerMs, isWorkday, paidIntervals } from './model.mjs';
 import { createTimestampTicker } from './live.mjs';
 import { formatAmount, formatCurrency, belowCentPerSecond, roundedMoney } from './money.mjs';
 import { formatWorkEquivalent } from './work-equivalent.mjs';
 import { createHoldStepper } from './hold-stepper.mjs';
-import { monthKey, plannedPayDays, payDaysModeForDate, migratePayDays } from './model.mjs';
+import { monthKey, plannedPayDays, payDaysModeForDate, migratePayDays, saveSettings, salaryForDate } from './model.mjs';
 
 import { browserApi } from './browser-api.mjs';
 import { parseBackup, MAX_BACKUP_BYTES } from './browser-store.mjs';
@@ -133,7 +133,7 @@ function populateSettings() {
   for (const [key, value] of Object.entries(state.settings)) {
     if (Array.isArray(value) || !form.elements[key]) continue;
     if (key === 'lunch') form.elements[key].checked = value;
-    else form.elements[key].value = key === 'salary' ? Number(value).toFixed(2) : value;
+    else form.elements[key].value = key === 'salary' ? !state.onboarded && value === 0 ? '' : Number(value).toFixed(2) : value;
   }
   for (const [container, field, selected] of [['weekdays', 'weekday', state.settings.weekdays], ['alternate-weekdays', 'weekdayB', state.settings.alternateWeekdays ?? [1, 2, 3, 4, 5, 6]]]) {
     $(container).replaceChildren();
@@ -147,6 +147,8 @@ function populateSettings() {
   form.elements.anchorWeek.value = state.settings.anchorWeek ?? emptyState(clockNow(state)).settings.anchorWeek;
   form.elements.anchorKind.value = state.settings.anchorKind ?? '';
   const key = dateKey(new Date(now()));
+  form.elements.salaryFrom.value = salaryForDate(state, key) !== state.settings.salary ? 'tomorrow' : 'today';
+  text('salary-effective-note', salaryForDate(state, key) !== state.settings.salary ? `已安排下次生效工资 ${money(state.settings.salary)}；今天仍按 ${money(salaryForDate(state, key))}。` : '今天生效会重算今天工资；明天生效保留今天记录。');
   payDaysFormMonth = monthKey(key);
   form.elements.payDaysMode.value = payDaysModeForDate(key, state.settings) === 'manual' ? 'manual' : 'auto';
   updateScheduleFields();
@@ -278,7 +280,7 @@ async function maybeGoalCompletion() {
 function workContextKey(stamp) {
   const shift = activeShift(state, stamp); if (shift) return shift.key;
   const today = dateKey(new Date(stamp)); if (state.days[today]?.sessions.length) return today;
-  const last = latestSummary(); return last && dateKey(new Date(last.clockOutAt)) === today ? last.date : today;
+  return today;
 }
 function paintAverages(day, month) {
   const stats = state.display === 'month' ? month : day, actual = stats.actual;
@@ -336,11 +338,10 @@ function render() {
   document.body.classList.toggle('overtime-mode', overtime); document.body.classList.toggle('overtime-ended', finishedOvertime);
   text('mini-work', running ? '下班' : day?.sessions.length ? '起来加班' : '开始上班');
   text('tray-gross', money(d.earned)); text('tray-costs', money(d.fixed + d.expenses)); text('tray-net', money(d.net));
-  text('date-label', `${time.toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' })} · ${state.demo ? '虚拟演示时钟' : '本机时间'}`);
-  $('mode-notice').hidden = !!state.onboarded && !state.demo;
-  $('mode-notice').classList.toggle('demo', !!state.demo); $('exit-demo').hidden = !state.demo;
-  text('mode-copy', state.demo ? '演示模式 · 全部为虚拟数据，时间为模拟时钟。' : !state.onboarded ? '第一次见，先把考勤和工资说清楚。初始金额是示例，请按需要修改。' : '按你的考勤和记录计算，班不能白上。');
-  text('mini-notice', state.demo ? '虚拟数据演示 · 时间为模拟时钟' : overtime ? '加班这么久，领导肯定很器重你吧。' : '今天的班，也得上出点数字。');
+  text('date-label', `${time.toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' })} · 本机时间`);
+  $('mode-notice').hidden = !!state.onboarded;
+  text('mode-copy', !state.onboarded ? '第一次见，先选考勤，输入到手工资。' : '按你的考勤和记录计算，班不能白上。');
+  text('mini-notice', overtime ? '加班这么久，领导肯定很器重你吧。' : '今天的班，也得上出点数字。');
   paintLive(stamp);
   if (state.display === 'today') updateNetTitle(d.net);
   const previousSummary = latestSummary();
@@ -446,7 +447,7 @@ function showSummary(summary) {
   text('summary-overtime', duration(summary.overtime ?? 0)); text('summary-overtime-pay', money(summary.overtimePay ?? 0));
   text('summary-hourly', summary.hourly === null ? '不可计算' : `${money(summary.hourly)} / 小时`);
   text('summary-costs', money(summary.expenses + summary.fixed)); text('summary-net', money(summary.net));
-  text('summary-note', `${summary.recalculatedAt ? '已按修正的上班时间重算。' : ''}工资自动计到 ${summary.scheduledEnd}，加班费按下班记录另计；加班工时计入有效工时分母。`);
+  text('summary-note', `${summary.recalculatedAt ? '已按修正记录重算。' : ''}工资自动计到 ${summary.scheduledEnd}，加班费按下班记录另计；加班工时计入有效工时分母。`);
   $('summary-dialog').showModal();
 }
 async function finishClockOut(stamp, decision) {
@@ -652,24 +653,25 @@ $('schedule-mode').addEventListener('change', () => {
   if (mode === 'alternating' && state.settings.scheduleMode !== 'alternating') form.elements.anchorKind.value = '';
   updateScheduleFields();
 });
-$('settings-form').addEventListener('submit', e => { e.preventDefault(); try { const f = new FormData(e.currentTarget), s = readSettingsForm(); if (s.payDaysMode === 'auto') s.payDays = plannedPayDays(dateKey(new Date(now())), s); validateSettings(s); const previous = state.settings, first = !state.onboarded; state.settings = s; let converted; try { converted = convertLegacyFixed(state, dateKey(new Date(now()))); } catch (error) { state.settings = previous; throw error; } state.onboarded = true; state.reminder ??= { enabled: false, enabledAt: null, delivered: {} }; const enabled = f.get('reminder') === 'on'; if (enabled && !state.reminder.enabled) state.reminder.enabledAt = now(); state.reminder.enabled = enabled; persist(); render(); syncPayDaysForm(); text('settings-feedback', `已保存，已有日期和已保存分摊表保持原口径。${converted ? `${converted} 笔旧账单从今天起切到考勤工作日，之前历史保留。` : ''}`); if (first) { showView('dashboard'); toast('考勤和工资记好了，开始上班吧。'); } } catch (error) { text('settings-feedback', error.message); } });
-$('load-demo').addEventListener('click', () => {
-  const action = () => mutate(() => { state = demoState(); populateSettings(); });
-  if (state.demo) { toast('当前已经是虚拟演示模式'); return; }
-  // Browser storage keeps personal and demo records in separate slots.
-  action(); showView('dashboard');
-});
-$('exit-demo').addEventListener('click', async () => {
-  try { await saveTail; const loaded = await api.loadReal(); state = loaded.state ?? emptyState(); migratePayDays(state, clockNow(state).getTime()); migrateGoal(state, clockNow(state).getTime()); if (loaded.error) throw Error(loaded.error); settle(state, now()); persist(); populateSettings(); renderLists(); render(); if (!state.onboarded) showView('settings'); toast('已返回本地记录；演示数据另存'); } catch (error) { toast(error.message); }
-});
+$('settings-form').addEventListener('submit', async e => { e.preventDefault(); try {
+  const f = new FormData(e.currentTarget), s = readSettingsForm(), first = !state.onboarded;
+  if (s.payDaysMode === 'auto') s.payDays = plannedPayDays(dateKey(new Date(now())), s);
+  const result = saveSettings(state, s, f.get('salaryFrom'), now());
+  state.onboarded = true; state.reminder ??= { enabled: false, enabledAt: null, delivered: {} };
+  const enabled = f.get('reminder') === 'on'; if (enabled && !state.reminder.enabled) state.reminder.enabledAt = now(); state.reminder.enabled = enabled;
+  if (!await persist()) throw Error('保存未完成，请保持窗口打开并重试');
+  render(); renderLists(); syncPayDaysForm();
+  text('salary-effective-note', salaryForDate(state, dateKey(new Date(now()))) !== state.settings.salary ? `已安排下次生效工资 ${money(state.settings.salary)}；今天仍按 ${money(salaryForDate(state, dateKey(new Date(now()))))}。` : '今天生效会重算今天工资；明天生效保留今天记录。');
+  text('settings-feedback', result.changed ? `已保存，工资从 ${result.effectiveDate} 生效。${result.recalculated ? '今天工资、净额及目标池已重算。' : f.get('salaryFrom') === 'today' ? '今天尚无上班记录，新记录按此工资计算。' : '今天保持原工资，明天新记录生效。'}` : '设置已保存。');
+  if (first) { showView('dashboard'); toast('考勤和到手工资记好了，开始上班吧。'); }
+} catch (error) { text('settings-feedback', error.message); } });
 $('import-data').addEventListener('click', () => $('backup-file').click());
 $('backup-file').addEventListener('change', async event => {
   const file = event.target.files[0]; event.target.value = ''; if (!file) return;
   try {
     if (file.size > MAX_BACKUP_BYTES) throw Error('备份超过 16 MB');
     const imported = parseBackup(await file.text());
-    const demo = !!imported.demo;
-    ask('导入备份', `这是${demo ? '虚拟演示' : '个人'}档案。导入会替换浏览器中的同类记录，另一类档案保留。建议先导出当前备份；导入不会上传文件。`, async () => {
+    ask('导入备份', `导入会替换此浏览器中的个人记录。建议先导出当前备份。`, async () => {
       try {
         await saveTail;
         imported.onboarded ??= Object.keys(imported.days).length > 0;
@@ -691,6 +693,7 @@ async function bootstrap() {
     const loaded = api ? await api.load() : { state: null };
     $('collapse-to-tray').hidden = true;
     state = loaded.state ?? emptyState();
+    if (loaded.legacyModeRetired) toast('已返回个人记录，旧体验档案原样保留。');
     state.onboarded ??= Object.keys(state.days).length > 0;
     state.reminder ??= { enabled: false, enabledAt: null, delivered: {} };
     if (loaded.error) throw Error(loaded.error);

@@ -1,13 +1,15 @@
+import { legacyStartWork as startWork } from './fixtures.mjs';
+const addExpense = (s, e) => realAddExpense(s, e, at('2026-11-30','23:00'));
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { emptyState, at, dateKey, datesInMonth, plannedPayDays, effectivePayDays, payDaysModeForDate, settingsForDate, migratePayDays, validateSettings, validateState, isWorkday, ratePerMs, startWork, clockOut, dayStats, monthStats, monthlyReport, saveMonthlyReview, addFixed, addExpense, fixedForDate, saveGoal, goalStats } from '../src/model.mjs';
+import { emptyState, at, dateKey, datesInMonth, plannedPayDays, effectivePayDays, payDaysModeForDate, settingsForDate, migratePayDays, validateSettings, validateState, isWorkday, ratePerMs,  clockOut, dayStats, monthStats, monthlyReport, saveMonthlyReview, addFixed, addExpense as realAddExpense, fixedForDate, saveGoal, goalStats } from '../src/model.mjs';
 import { parseBackup } from '../src/browser-store.mjs';
 const close = (a, b) => assert.ok(Math.abs(a-b) < 1e-6, `${a} ≈ ${b}`);
 function fixture(date='2026-11-01', mode='double') {
   const s=emptyState(new Date(at(date,'08:00')));s.onboarded=true;s.settings.salary=12345.67;s.settings.scheduleMode=mode;
   s.settings.weekdays=mode==='everyday'?[0,1,2,3,4,5,6]:['single','996'].includes(mode)?[1,2,3,4,5,6]:[1,2,3,4,5];
   s.settings.anchorWeek='2026-11-02';s.settings.anchorKind='double';if(mode==='996')s.settings.end='21:00';
-  s.settings=settingsForDate(date,s.settings);s.demo={time:at(date,'22:00'),wall:Date.now()+3600000};return s;
+  s.settings=settingsForDate(date,s.settings);return s;
 }
 function fullMonth(state,month){const dates=datesInMonth(month+'-01');for(const key of dates){if(!isWorkday(key,state.settings))continue;startWork(state,at(key,state.settings.start));clockOut(state,at(key,state.settings.end));}return monthStats(state,dates.at(-1),at(dates.at(-1),'23:00'));}
 test('new users default to actual current-month days; five calendars have known November/December totals',()=>{

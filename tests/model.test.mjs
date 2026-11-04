@@ -1,6 +1,9 @@
+import { legacyStartWork as startWork } from './fixtures.mjs';
+const addExpense = (s, e) => realAddExpense(s, e, at('2026-11-03', '14:36'));
+import { fictionalState } from './fixtures.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { emptyState, demoState, dateKey, at, validateSettings, validateState, startWork, stopWork, activeShift, clockOut, addBreak, deleteBreak, dueReminder, markReminderDelivered, attendanceStatus, monthlyReport, dueMonthlyReview, saveMonthlyReview, saveGoal, settleGoal, isWorkday, datesInMonth, expenseForDate, convertLegacyFixed, settle, dayStats, monthStats, goalStats, addFixed, fixedForDate, fixedItemForDate, clockNow, addExpense } from '../src/model.mjs';
+import { emptyState, dateKey, at, validateSettings, validateState,  stopWork, activeShift, clockOut, addBreak, deleteBreak, dueReminder, markReminderDelivered, attendanceStatus, monthlyReport, dueMonthlyReview, saveMonthlyReview, saveGoal, settleGoal, isWorkday, datesInMonth, expenseForDate, convertLegacyFixed, settle, dayStats, monthStats, goalStats, addFixed, fixedForDate, fixedItemForDate, clockNow, addExpense as realAddExpense } from '../src/model.mjs';
 const key = '2026-11-03';
 const stateFor = () => { const s = emptyState(new Date(at(key, '08:00'))); s.settings.salary = 17600; s.settings.payDays = 22; delete s.settings.payDaysMode; delete s.settings.payDaysMonth; return s; };
 const close = (a, b) => assert.ok(Math.abs(a - b) < 1e-7, `${a} ≈ ${b}`);
@@ -75,13 +78,13 @@ test('reject invalid zero shifts, overnight, invalid weekdays, lunch and pay day
   assert.throws(() => startWork(stateFor(), at('2026-11-07', '10:00'))); assert.throws(() => startWork(stateFor(), at(key, '18:01')));
 });
 test('temporary expense changes net once and rejects invalid/future dates', () => {
-  const s = demoState(); const stamp = clockNow(s).getTime(), d = dayStats(s, key, stamp);
+  const s = fictionalState(); const stamp = at(key, '14:36'), d = dayStats(s, key, stamp);
   addExpense(s, { name: '晚餐', category: '晚餐', amount: 20, date: key }); close(dayStats(s, key, stamp).net, d.net - 20);
   assert.throws(() => addExpense(s, { name: 'x', amount: -5, date: key })); assert.throws(() => addExpense(s, { name: 'x', amount: 5, date: '2026-11-04' }));
 });
-test('demo state is valid and demo clock recovers its elapsed wall time', () => {
-  const s = demoState(1000); validateState(s); assert.equal(clockNow(s, 61000).getTime(), at(key, '14:37'));
-  assert.equal(dateKey(clockNow(s, 0)), key);
+test('clock always follows wall time; legacy simulated clocks are rejected', () => {
+  const s = fictionalState(); validateState(s); assert.equal(clockNow(s, 61000).getTime(), 61000);
+  s.demo = { time: at(key, '14:36'), wall: 1000 }; assert.throws(() => validateState(s), /旧演示/); assert.equal(clockNow(s, 0).getTime(), 0);
 });
 test('manual break presets enforce paid-time capacity without truncating, deletion restores effective hours', () => {
   const s = stateFor(); startWork(s, at(key, '09:00'));
@@ -209,7 +212,7 @@ test('double, single and alternating calendars honor an explicit anchor across m
   assert.throws(() => validateSettings({ ...s, anchorWeek: '2026-11-03' }), /基准/); assert.throws(() => validateSettings({ ...s, anchorKind: '' }));
 });
 test('whole-month custom costs spread once over saved attendance dates, never rest days or another month', () => {
-  const s = stateFor(); s.settings.scheduleMode = 'alternating'; s.demo = { time: at(key, '14:00'), wall: Date.now() };
+  const s = stateFor(); s.settings.scheduleMode = 'alternating';
   addExpense(s, { name: '整月计划', amount: 2300, category: '自定义', scope: 'month', month: '2026-11', date: '2026-11-01' });
   const expense = s.expenses[0]; assert.equal(expense.allocationDates.length, 23); close(expenseForDate(expense, key), 100); close(expenseForDate(expense, '2026-11-07'), 0); close(expenseForDate(expense, '2026-11-14'), 100);
   close(monthStats(s, key, at(key, '14:00')).expenses, 200); close(monthStats(s, key, at('2026-11-30', '23:00')).expenses, 2300); close(monthStats(s, '2026-12-01', at('2026-12-01', '23:00')).expenses, 0);
@@ -220,7 +223,7 @@ test('zero-workday plans reject monthly allocation without altering records; dai
   assert.throws(() => addFixed(s, { name: '房贷', amount: 100, period: 'month', allocation: 'workday' }, key), /为 0/);
   assert.throws(() => addExpense(s, { name: '整月计划', amount: 100, category: '自定义', scope: 'month', month: '2026-11', date: '2026-11-01' }), /为 0/);
   assert.equal(s.expenses.length, 0); assert.equal(s.fixed.length, 0); assert.throws(() => startWork(s, at(key, '09:00')));
-  s.demo = { time: at(key, '14:00'), wall: Date.now() }; addExpense(s, { name: '当日花销', amount: 10, category: '自定义', date: key, scope: 'day' }); close(dayStats(s, key, at(key, '14:00')).expenses, 10);
+   addExpense(s, { name: '当日花销', amount: 10, category: '自定义', date: key, scope: 'day' }); close(dayStats(s, key, at(key, '14:00')).expenses, 10);
 });
 test('calendar changes preserve day snapshots and existing allocation tables; legacy switch is prospective and idempotent', () => {
   const s = stateFor(); s.trackingStart = '2026-11-01'; startWork(s, at(key, '09:00')); s.settings.scheduleMode = 'single'; s.settings.weekdays.push(6); assert.equal(isWorkday('2026-11-07', s.days[key].settings), false);

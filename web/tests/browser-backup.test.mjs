@@ -1,13 +1,14 @@
+import { legacyStartWork as startWork } from './fixtures.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { emptyState, demoState, at, startWork, clockOut, correctStartTime, saveGoal, settleGoal, migrateGoal, goalStats, monthlyReport, saveMonthlyReview, validateState } from '../src/model.mjs';
+import { emptyState, at,  clockOut, correctStartTime, saveGoal, settleGoal, migrateGoal, goalStats, monthlyReport, saveMonthlyReview, validateState } from '../src/model.mjs';
 import { parseBackup } from '../src/browser-store.mjs';
 
 test('imports both desktop JSON and browser backup envelopes without changing calculations', () => {
   const personal = emptyState();
   assert.deepEqual(parseBackup(JSON.stringify(personal)), personal);
-  const demo = demoState();
-  assert.deepEqual(parseBackup(JSON.stringify({ format: 'wonangfei-backup', state: demo })), demo);
+  assert.deepEqual(parseBackup(JSON.stringify({ format: 'wonangfei-backup', state: personal })), personal);
+  assert.throws(() => parseBackup(JSON.stringify({ ...personal, demo: { time: 1, wall: 1 } })), /旧演示/);
 });
 test('rejects malformed, unsupported and oversized imports before storage is touched', () => {
   for (const value of ['not json', '{}', '{"version":2}', ' '.repeat(16 * 1024 * 1024 + 1)]) assert.throws(() => parseBackup(value));

@@ -13,7 +13,7 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible{ou
 .nav-item{color:#404752;border-radius:999px;padding:10px 16px;font-size:13px}
 .nav-item.active{background:#d8f4ec;color:#006d54;box-shadow:none}
 .nav-item.active svg{color:#009b79}
-.sidebar-demo{color:#67717d!important}
+
 main{max-width:1440px;margin:0 auto;width:100%;padding:9px 25px 24px}
 .page-header h1{font-size:12px;color:#67717d;letter-spacing:0;font-weight:400}
 .page-header .eyebrow{font-size:10px;color:#67717d}
@@ -22,7 +22,7 @@ main{max-width:1440px;margin:0 auto;width:100%;padding:9px 25px 24px}
 .header-actions button:hover,.quiet-button:hover{background:#fff}
 .header-actions button{font-size:11px;padding:8px 12px}
 .notice{color:#59666c;background:#eaf1f7b3;border-radius:12px;border:1px solid #fff9;font-size:10px;padding:7px 11px;margin-bottom:13px}
-.notice.demo{color:#536c64;background:#e6f8f3a6}
+
 .notice button{color:#43685d}
 .card{background:rgba(255,255,255,.72);border:1px solid #fff;border-radius:20px;box-shadow:0 12px 30px #273b5609;backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px)}
 .overview-grid{grid-template-columns:minmax(0,1.34fr) minmax(0,1fr);gap:16px}
@@ -174,7 +174,7 @@ body.is-loading .app-shell,body.is-loading .mini-panel{visibility:hidden}
 .loading-dots i:nth-child(2){animation-delay:.2s}.loading-dots i:nth-child(3){animation-delay:.4s}
 @keyframes loading-dot{0%,100%{opacity:.3;transform:translateY(0)}50%{opacity:1;transform:translateY(-3px)}}
 @media(max-width:1000px){.sidebar{padding:17px 20px 10px;gap:15px}.nav-item{font-size:12px;padding:9px 12px}.hero .hero-value strong{font-size:63px}.hero-art{width:175px;height:145px;bottom:50px}.salary-rates{gap:7px 12px}.hero select{font-size:20px}.shift-card .card-heading{font-size:16px}.shift-card .countdown{font-size:36px}.shift-card{padding:23px 21px 18px}}
-@media(max-width:800px){.sidebar{flex-wrap:wrap}.brand{font-size:23px}.sidebar nav{margin:0}.sidebar-demo{display:none}.hero .hero-value strong{font-size:52px}.hero .hero-value strong.long-value{font-size:34px}.hero .hero-value>span{font-size:29px}.hero-art{width:145px;right:0;bottom:58px;opacity:.65}.hero-description{max-width:60%;font-size:11px}.shift-card .card-heading{font-size:14px}.shift-card .countdown{font-size:31px}.clock-art{width:75px;right:8px}.finance-card .money-grid strong{font-size:19px}.salary-rates{gap:7px 12px}.salary-rates small{font-size:10px}.salary-rates b{font-size:11px}}
+@media(max-width:800px){.sidebar{flex-wrap:wrap}.brand{font-size:23px}.sidebar nav{margin:0}.hero .hero-value strong{font-size:52px}.hero .hero-value strong.long-value{font-size:34px}.hero .hero-value>span{font-size:29px}.hero-art{width:145px;right:0;bottom:58px;opacity:.65}.hero-description{max-width:60%;font-size:11px}.shift-card .card-heading{font-size:14px}.shift-card .countdown{font-size:31px}.clock-art{width:75px;right:8px}.finance-card .money-grid strong{font-size:19px}.salary-rates{gap:7px 12px}.salary-rates small{font-size:10px}.salary-rates b{font-size:11px}}
 @media(max-width:640px){
  .sidebar{padding:16px 15px 8px;gap:13px}.brand{font-size:23px}.brand-mark,.brand-mark img{width:40px;height:40px}.sidebar nav{width:100%;display:flex;justify-content:space-between;gap:3px}.nav-item{font-size:12px;padding:9px 10px;gap:6px;white-space:nowrap}.nav-item svg{width:16px;height:16px}.sidebar .nav-item span{display:none}
  #collapse-to-tray,#pin,#mini{display:none}

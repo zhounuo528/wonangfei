@@ -1,6 +1,7 @@
+import { legacyStartWork as startWork } from './fixtures.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { emptyState, getDay, at, startWork, stopWork, clockOut, correctStartTime, addBreak, dayStats, monthStats, monthlyReport, saveMonthlyReview, goalStats, saveGoal, attendanceStatus, validateState } from '../src/model.mjs';
+import { emptyState, getDay, at,  stopWork, clockOut, correctStartTime, addBreak, dayStats, monthStats, monthlyReport, saveMonthlyReview, goalStats, saveGoal, attendanceStatus, validateState } from '../src/model.mjs';
 import { parseBackup } from '../src/browser-store.mjs';
 const key = '2026-11-03', hour = 3600000;
 function fixture(date = key) {

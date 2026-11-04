@@ -1,6 +1,7 @@
+import { legacyStartWork as startWork } from './fixtures.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { emptyState, at, getDay, startWork, clockOut, breakDate, addCurrentBreak, dayStats, monthStats, validateState } from '../src/model.mjs';
+import { emptyState, at, getDay,  clockOut, breakDate, addCurrentBreak, dayStats, monthStats, validateState } from '../src/model.mjs';
 const key = '2026-11-03';
 const fixture = () => emptyState(new Date(at(key, '08:00')));
 test('current break ignores a supplied historical date and keeps duration, type and original records', () => {

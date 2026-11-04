@@ -8,7 +8,6 @@ const completed = tx => {
   // A request can fail before callers reach `await done`; keep its rejection handled.
   done.catch(() => {}); return done;
 };
-const slot = state => state.demo ? 'demo' : 'real';
 
 export function parseBackup(json) {
   if (new TextEncoder().encode(json).length > MAX_BACKUP_BYTES) throw Error('备份超过 16 MB');
@@ -34,34 +33,29 @@ export class BrowserStore {
     });
     return this.database;
   }
-  async read(forceReal = false) {
+  async read() {
     const db = await this.open(), tx = db.transaction('records', 'readonly'), done = completed(tx), store = tx.objectStore('records');
-    const keys = ['real', 'demo', 'mode'];
+    const keys = ['real', 'mode'];
     const values = await Promise.all(keys.map(key => request(store.get(key)))); await done;
     try {
       const validRevision = record => record && Number.isSafeInteger(record.revision) && record.revision > 0;
-      if (values[2] !== undefined && (!validRevision(values[2]) || typeof values[2].demo !== 'boolean')) throw Error('档案模式记录无效');
-      const profiles = values.slice(0, 2).map((record, i) => {
-        if (record === undefined) return null;
-        if (!validRevision(record) || !record.state) throw Error('存储记录结构无效');
-        const state = parseBackup(JSON.stringify(record.state));
-        if (slot(state) !== keys[i]) throw Error('个人与演示档案不匹配');
-        return state;
-      });
+      if (values[1] !== undefined && !validRevision(values[1])) throw Error('档案版本记录无效');
+      const record = values[0];
+      if (record !== undefined && (!validRevision(record) || !record.state)) throw Error('存储记录结构无效');
+      // The old demo key is an archive: never parse, copy, delete or promote it.
+      const state = record ? parseBackup(JSON.stringify(record.state)) : null;
       this.expected = Object.fromEntries(keys.map((key, i) => [key, values[i]?.revision ?? 0]));
-      const state = profiles[forceReal || !values[2]?.demo ? 0 : 1];
-      return { state, platform: 'web', storage: '仅此浏览器 · 不上传个人记录' };
+      return { state, legacyModeRetired: values[1]?.demo === true, platform: 'web', storage: '仅此浏览器 · 不上传个人记录' };
     } catch (error) { this.locked = true; throw Error(`原记录读取失败，已保留并阻止覆盖：${error.message}`); }
   }
   load() { return this.read(); }
-  async loadReal() { await this.tail; return this.read(true); }
   save(state) {
     const snapshot = structuredClone(state); validateState(snapshot);
     if (new TextEncoder().encode(JSON.stringify(snapshot)).length > MAX_BACKUP_BYTES) return Promise.reject(Error('记录超过 16 MB，请先导出备份'));
     this.pending++;
     const operation = this.tail.catch(() => {}).then(async () => {
       if (this.locked) throw Error('原记录不可覆盖，请先导出备份并刷新页面');
-      const db = await this.open(), tx = db.transaction('records', 'readwrite'), done = completed(tx), store = tx.objectStore('records'), key = slot(snapshot);
+      const db = await this.open(), tx = db.transaction('records', 'readwrite'), done = completed(tx), store = tx.objectStore('records'), key = 'real';
       const [record, mode] = await Promise.all([request(store.get(key)), request(store.get('mode'))]);
       if ((record?.revision ?? 0) !== (this.expected[key] ?? 0) || (mode?.revision ?? 0) !== (this.expected.mode ?? 0)) {
         this.locked = true; tx.abort(); await done.catch(() => {});
@@ -70,7 +64,8 @@ export class BrowserStore {
       const revision = (record?.revision ?? 0) + 1, modeRevision = (mode?.revision ?? 0) + 1;
       try {
         store.put({ state: snapshot, revision }, key);
-        store.put({ demo: key === 'demo', revision: modeRevision }, 'mode');
+        // Keep false for older readers, with the same atomic revision guard.
+        store.put({ demo: false, revision: modeRevision }, 'mode');
       } catch (error) {
         // Synchronous quota/clone failures must also roll back an earlier put.
         tx.abort(); await done.catch(() => {}); throw error;
@@ -87,7 +82,7 @@ export function downloadBackup(state) {
   const payload = { format: 'wonangfei-backup', exportedAt: new Date().toISOString(), state };
   const url = URL.createObjectURL(new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' }));
   const link = document.createElement('a'); link.href = url;
-  link.download = `窝囊费-${state.demo ? '虚拟演示' : '个人备份'}-${new Date().toISOString().slice(0, 10)}.json`;
+  link.download = `窝囊费-个人备份-${new Date().toISOString().slice(0, 10)}.json`;
   document.body.append(link); link.click(); link.remove(); setTimeout(() => URL.revokeObjectURL(url), 30000);
   return { canceled: false };
 }

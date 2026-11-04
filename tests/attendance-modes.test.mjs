@@ -1,10 +1,12 @@
+import { legacyStartWork as startWork } from './fixtures.mjs';
+const addExpense = (s, e) => realAddExpense(s, e, at('2028-02-29','22:00'));
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { createRequire } from 'node:module';
-import { emptyState, at, datesInMonth, isWorkday, validateSettings, validateState, startWork, clockOut, dayStats, monthStats, monthlyReport, saveMonthlyReview, addFixed, fixedForDate, addExpense, expenseForDate, dueReminder, scheduledMs } from '../src/model.mjs';
+import { emptyState, at, datesInMonth, isWorkday, validateSettings, validateState,  clockOut, dayStats, monthStats, monthlyReport, saveMonthlyReview, addFixed, fixedForDate, addExpense as realAddExpense, expenseForDate, dueReminder, scheduledMs } from '../src/model.mjs';
 const { LocalStore } = createRequire(import.meta.url)('../desktop/storage.cjs');
 const date = '2028-02-01', all = [0, 1, 2, 3, 4, 5, 6], six = [1, 2, 3, 4, 5, 6];
 function fixture(mode = 'double') {
@@ -12,7 +14,7 @@ function fixture(mode = 'double') {
   state.settings.salary = 17600; state.settings.payDays = 22; delete state.settings.payDaysMode; delete state.settings.payDaysMonth; state.settings.scheduleMode = mode;
   state.settings.weekdays = mode === 'everyday' ? [...all] : ['996', 'single'].includes(mode) ? [...six] : [1, 2, 3, 4, 5];
   if (mode === '996') state.settings.end = '21:00';
-  state.demo = { time: at('2028-02-29', '22:00'), wall: Date.now() + 3600000 };
+
   return state;
 }
 const close = (actual, expected) => assert.ok(Math.abs(actual - expected) < 1e-7, `${actual} ≈ ${expected}`);

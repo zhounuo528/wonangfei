@@ -15,12 +15,11 @@ const indexUrl = pathToFileURL(path.join(root, 'src/index.html')).href;
 function trusted(event) { if (!win || event.sender !== win.webContents || event.senderFrame !== win.webContents.mainFrame || event.senderFrame.url !== indexUrl) throw Error('未知调用来源'); }
 function handle(name, fn) { ipcMain.handle(name, async (event, ...args) => { trusted(event); return fn(...args); }); }
 handle('state:load', async () => ({ ...await store.load(), nativeVisible: win.isVisible() && !win.isMinimized(), platform: process.platform }));
-handle('state:real', () => store.loadReal());
 handle('state:save', async state => { await store.save(state); statusBar?.update(); });
 handle('state:export', async state => {
   const { validateState, dateKey } = await import(pathToFileURL(path.join(root, 'src/model.mjs')).href);
   validateState(state);
-  const result = await dialog.showSaveDialog(win, { title: '导出本地备份', defaultPath: `workday-cheer-${state.demo ? 'demo-' : ''}${dateKey()}.json`, filters: [{ name: 'JSON 备份', extensions: ['json'] }] });
+  const result = await dialog.showSaveDialog(win, { title: '导出本地备份', defaultPath: `workday-cheer-${dateKey()}.json`, filters: [{ name: 'JSON 备份', extensions: ['json'] }] });
   if (!result.canceled) await fs.writeFile(result.filePath, JSON.stringify(state, null, 2), { mode: 0o600 });
   return { canceled: result.canceled };
 });

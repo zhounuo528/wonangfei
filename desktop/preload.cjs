@@ -1,7 +1,6 @@
 const { contextBridge, ipcRenderer } = require('electron');
 contextBridge.exposeInMainWorld('workday', Object.freeze({
   load: () => ipcRenderer.invoke('state:load'),
-  loadReal: () => ipcRenderer.invoke('state:real'),
   save: state => ipcRenderer.invoke('state:save', state),
   exportData: state => ipcRenderer.invoke('state:export', state),
   pin: enabled => ipcRenderer.invoke('window:pin', enabled),

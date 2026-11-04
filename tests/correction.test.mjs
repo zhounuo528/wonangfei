@@ -1,10 +1,11 @@
+import { legacyStartWork as startWork } from './fixtures.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { createRequire } from 'node:module';
-import { emptyState, getDay, at, startWork, stopWork, clockOut, correctStartTime, addBreak, dayStats, monthStats, monthlyReport, saveMonthlyReview, goalStats, saveGoal, attendanceStatus, validateState } from '../src/model.mjs';
+import { emptyState, getDay, at,  stopWork, clockOut, correctStartTime, addBreak, dayStats, monthStats, monthlyReport, saveMonthlyReview, goalStats, saveGoal, attendanceStatus, validateState } from '../src/model.mjs';
 const { LocalStore } = createRequire(import.meta.url)('../desktop/storage.cjs');
 const key = '2026-11-03', hour = 3600000;
 function fixture(date = key) {
