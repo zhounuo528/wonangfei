@@ -1,3 +1,4 @@
+import { createSalaryEditor } from './salary-ui.mjs';
 import { createTimeEditor } from './time-editor.mjs';
 import { calendarInfo } from './calendar.mjs';
 import { createCalendarEditor } from './calendar-ui.mjs';
@@ -7,7 +8,7 @@ import { createTimestampTicker } from './live.mjs';
 import { formatAmount, formatCurrency, belowCentPerSecond, roundedMoney } from './money.mjs';
 import { formatWorkEquivalent } from './work-equivalent.mjs';
 import { createHoldStepper } from './hold-stepper.mjs';
-import { monthKey, plannedPayDays, payDaysModeForDate, migratePayDays, saveSettings, salaryForDate } from './model.mjs';
+import { monthKey, plannedPayDays, payDaysModeForDate, migratePayDays, saveSettings, salaryForDate, salaryEvents, weeklyReport, migrateOvertimeExclusions } from './model.mjs';
 
 const $ = id => document.getElementById(id);
 const api = window.workday;
@@ -15,7 +16,7 @@ let state, period = 'day', currentView = 'dashboard', mini = false, pinned = fal
 let saveTail = Promise.resolve(), saveRevision = 0, liveSnapshot, housekeeper, nativeVisible = true, nativeVisibilityObserved = false, tickHousekeeper;
 let checkingReminder = false, reminderRetryAfter = 0;
 let calendarMonth, calendarDetailKey, calendarSignature;
-let calendarEditor, timeEditor;
+let calendarEditor, timeEditor, salaryEditor;
 let checkingMonthlyReview = false, monthlyRetryAfter = 0, queuedReminder, queuedMonthlyReview;
 let workActionBusy = false, pendingClockOut;
 let checkingGoal = false, goalRetryAfter = 0, queuedGoal;
@@ -149,8 +150,10 @@ function populateSettings() {
   form.elements.anchorWeek.value = state.settings.anchorWeek ?? emptyState(clockNow(state)).settings.anchorWeek;
   form.elements.anchorKind.value = state.settings.anchorKind ?? '';
   const key = dateKey(new Date(now()));
-  form.elements.salaryFrom.value = salaryForDate(state, key) !== state.settings.salary ? 'tomorrow' : 'today';
-  text('salary-effective-note', salaryForDate(state, key) !== state.settings.salary ? `已安排下次生效工资 ${money(state.settings.salary)}；今天仍按 ${money(salaryForDate(state, key))}。` : '今天生效会重算今天工资；明天生效保留今天记录。');
+  const pending=salaryEvents(state).filter(c=>c.effectiveDate>key);
+  form.elements.salary.value=!state.onboarded?'':salaryForDate(state,key).toFixed(2);
+  $('salary-actions').hidden=!state.onboarded;$('salary-date-undo').hidden=!salaryEditor?.latest();
+  text('salary-effective-note',!state.onboarded?'首次填写从本月 1 日生效。':pending.length?`今天按 ${money(salaryForDate(state,key))}；待生效：${pending.map(c=>`${c.effectiveDate} ${money(c.salary)}`).join('；')}`:'调整工资时可选择过去、今天或未来日期；保存前查看影响。');
   payDaysFormMonth = monthKey(key);
   form.elements.payDaysMode.value = payDaysModeForDate(key, state.settings) === 'manual' ? 'manual' : 'auto';
   updateScheduleFields();
@@ -508,7 +511,7 @@ function renderCalendar() {
   for(let i=0;i<padding;i++){const blank=document.createElement('span');blank.className='calendar-blank';$('calendar-grid').append(blank);}
   for(const key of dates){
     const info=calendarInfo(state,key,now()),button=document.createElement('button'),num=document.createElement('span'),label=document.createElement('small');
-    button.className=`calendar-day ${info.status}${key===today?' today':''}`;button.dataset.calendarDate=key;num.textContent=String(Number(key.slice(-2)));label.textContent=info.future ? {work:'上班',rest:'休息',overtime:'加班',leave:'请假',swap:'调休'}[info.kind] : {ontime:'准时',early:'提前',late:'加班',working:'进行中',leave:'请假',swap:'调休'}[info.status] ?? (info.kind==='rest'?'休息':'未记录');button.append(num,label);button.disabled=!info.editable;
+    button.className=`calendar-day ${info.status}${key===today?' today':''}`;button.dataset.calendarDate=key;num.textContent=String(Number(key.slice(-2)));label.textContent=info.future ? {work:'上班',rest:'休息',overtime:'休息日加班',leave:'请假',swap:'调休'}[info.kind] : {ontime:'准时',early:'提前',late:'加班',working:'进行中',leave:'请假',swap:'调休'}[info.status] ?? (info.kind==='rest'?'休息':'未记录');button.append(num,label);button.disabled=!info.editable;
     let aria=`${key} ${info.label}${info.editable?'':` 早于记录起点 ${state.trackingStart}，只读`}`;
     if(info.profit!==null){const stats=dayStats(state,key,now()),value=document.createElement('b');value.className=`calendar-net ${state.display==='hidden'?'private':stats.net<0?'loss':stats.net===0?'zero':'gain'}`;value.textContent=money(stats.net).replace('¥','');value.title=`当日净利润 ${money(stats.net)}`;button.append(value);aria+=` 净利润 ${money(stats.net)}`;}
     button.setAttribute('aria-label',aria);button.addEventListener('click',()=>{calendarDetailKey=key;if(info.future||!info.recorded){calendarEditor.open(key);return;}renderCalendarDetail(key);$('calendar-detail-dialog').showModal();});$('calendar-grid').append(button);
@@ -521,24 +524,31 @@ function renderCalendarDetail(key) {
   text('calendar-detail-title',`${key} 的一天`);text('calendar-detail-status',info.label);text('calendar-detail-start',format(start));text('calendar-detail-end',activeSession(state,key,now())?'尚未点击下班':format(end));
   for(const field of ['earned','expenses','fixed','net'])text(`calendar-detail-${field}`,money(stats[field]));
   text('calendar-detail-overtime-pay',money(stats.overtimePay));text('calendar-detail-fish',duration(stats.fish));text('calendar-detail-overtime',duration(stats.overtime));text('calendar-detail-hourly',stats.hourly===null?'不可计算':`${money(stats.hourly)} / 小时`);
+  text('calendar-detail-actual',duration(stats.actual));text('calendar-detail-secondly',stats.secondly===null?'不可计算':`${money(stats.secondly)} / 秒${state.display!=='hidden'&&stats.secondly>0&&stats.secondly<0.01?'（实际速率低于 ¥0.01/秒）':''}`);
   $('calendar-rework').hidden=isAbsent(info.policy)||!!activeShift(state,now())||latestSummary()?.date!==key;$('calendar-correct-start').hidden=isAbsent(info.policy)||!day?.sessions.length;
-  text('calendar-detail-snapshot',isAbsent(info.policy)?'原始时段与加班费记录保留，当前按请假 / 调休处理。':`该日排班 ${stats.settings.start}–${stats.settings.end}。修改上下班或单日类型前先预览影响。`);
+  text('calendar-detail-snapshot',isAbsent(info.policy)?'原始时段与加班费记录保留，当前按休息 / 请假 / 调休处理。':`该日排班 ${stats.settings.start}–${stats.settings.end}。修改上下班或单日类型前先预览影响。`);
 }
 function moveCalendar(delta) { const date = new Date(`${calendarMonth}-01T00:00:00`); date.setMonth(date.getMonth() + delta); if (date.getFullYear() < 1000 || date.getFullYear() > 9999) return; calendarMonth = dateKey(date).slice(0, 7); renderCalendar(); }
 function showMonthlyReport(report) {
   const hours = ms => `${(ms / 3600000).toFixed(2)} 小时`;
-  $('report-month').value = report.month; $('report-month').max = dateKey(new Date(now())).slice(0, 7);
-  text('report-status', report.provisional ? '阶段回顾 · 进行中' : '已结束月份');
+  const weekly=report.period==='week',scope=weekly?'本周':'本月';$('report-title').textContent=`窝囊费${weekly?'周报':'月报'}`;$('report-period').value=weekly?'week':'month';$('report-month-label').hidden=weekly;$('report-week-label').hidden=!weekly;$('report-week').max=dateKey(new Date(now()));if(weekly)$('report-week').value=report.from;for(const [id,label]of [['report-earned-label',`${scope}赚到窝囊费 · 工资毛收入`],['report-daily-label',`${scope}净平均日薪`],['report-hourly-label',`${scope}净平均时薪`],['report-secondly-label',`${scope}净平均秒薪`]])text(id,label);
+  $('report-month').value = report.month??dateKey(new Date(now())).slice(0,7); $('report-month').max = dateKey(new Date(now())).slice(0, 7);
+  text('report-status', report.provisional ? '阶段回顾 · 进行中' : weekly?'已结束周次':'已结束月份');
   text('report-cutoff', `统计截至 ${new Date(report.asOf).toLocaleString('zh-CN', { hour12: false })} · 按现有记录汇总${report.recalculatedAt ? ' · 已按修正记录重算' : ''}`);
   text('report-earned', money(report.earned)); text('report-costs', money(report.costs)); text('report-net', money(report.net));
   text('report-cost-detail', `临时花销 ${money(report.expenses)} + 固定分摊 ${money(report.fixed)}`);
   text('report-worked', hours(report.worked)); text('report-actual', hours(report.actual)); text('report-hourly', report.hourly === null ? '不可计算' : `${money(report.hourly)} / 小时`);
+  text('report-daily',report.averageDaily==null?'不可计算':`${money(report.averageDaily)} / 天`);text('report-secondly',report.secondly==null?'不可计算':`${money(report.secondly)} / 秒${state.display!=='hidden'&&report.secondly!==0&&Math.abs(report.secondly)<0.01?(report.secondly<0?'（净亏低于 ¥0.01/秒）':'（实际速率低于 ¥0.01/秒）'):''}`);
   text('report-ontime', `准时下班 ${report.ontimeDays} 天`); text('report-late', `加班下班 ${report.lateDays} 天`); text('report-early', `提前下班 ${report.earlyDays} 天`);
   text('report-overtime', `共加班 ${hours(report.overtime)}，摸鱼 ${hours(report.fish)}。`);
-  text('report-absence', `请假 ${report.leaveDays ?? 0} 天 · 调休 ${report.swapDays ?? 0} 天；不计实际工作工时。月均薪用净收入计算。`);
+  text('report-absence', `请假 ${report.leaveDays ?? 0} 天 · 调休 ${report.swapDays ?? 0} 天；不计实际工作工时。均薪用净收入计算。`);
   text('report-active', report.activeDays ? `已记录 ${report.recorded} 天，另有 ${report.activeDays} 个班次尚未下班；进行中的班次未算入已下班天数。` : `已记录 ${report.recorded} 天。未记录的日期留白，不替你补满勤。`);
+  const c=report.comparison;for(const [field,label]of [['averageDaily','日薪'],['hourly','时薪'],['secondly','秒薪']]){const value=v=>v==null?'无数据':money(v);text(`report-compare-${field}`,c?`${label} ${value(c.baseline[field])} → ${value(c.actual[field])}`:'无数据');}
+  text('report-compare-note',c?`同一期间，假设没有加班 → 实际。去掉 ${hours(report.overtime)} 加班及对应加班费 ${money(report.overtimePay)}，其余收入、成本相同。${report.fish>0?'摸鱼按正常／加班工时比例分配，仅用于此对比。':''}`:'');
+  text('report-compare-range',weekly?`${report.from} — ${report.through}`:report.month);
   if (!$('monthly-dialog').open) $('monthly-dialog').showModal();
 }
+function openWeeklyReport(key){try{showMonthlyReport(weeklyReport(state,key,now()));}catch(error){toast(error.message);}}
 function openMonthlyReport(month) { try { if (month > dateKey(new Date(now())).slice(0, 7)) throw Error('这个月还没到，先把今天过完。'); const report = monthlyReport(state, month, now()); saveMonthlyReview(state, report); persist(); showMonthlyReport(report); } catch (error) { toast(error.message); } }
 function openExpense(category) {
   if (!requireSetup()) return;
@@ -570,6 +580,9 @@ const calendarContext = { state:()=>state, now, money, duration, toast, ask, com
   if(!await saveTail)throw failure;calendarSignature=null;render();renderLists();
 }};
 calendarEditor=createCalendarEditor(calendarContext);timeEditor=createTimeEditor(calendarContext);
+salaryEditor=createSalaryEditor({...calendarContext,saved:message=>{populateSettings();text('settings-feedback',message);toast(message);}});
+$('salary-date-edit').addEventListener('click',()=>{try{if(!$('settings-form').reportValidity())return;salaryEditor.open(readSettingsForm(),$('reminder-enabled').checked);}catch(error){text('settings-feedback',error.message);}});
+$('salary-date-undo').addEventListener('click',()=>salaryEditor.open(state.settings,state.reminder.enabled,true));
 document.querySelectorAll('[data-close]').forEach(b => b.addEventListener('click', () => $(b.dataset.close).close()));
 $('confirm-cancel').addEventListener('click', () => { $('confirm-dialog').close(); confirmAction = null; });
 $('confirm-ok').addEventListener('click', () => { const fn = confirmAction; confirmAction = null; $('confirm-dialog').close(); fn?.(); });
@@ -593,6 +606,8 @@ api?.onAction(action => { if ($('correction-dialog').open || pendingClockOut) { 
 $('open-calendar').addEventListener('click', () => { renderCalendar(); $('calendar-dialog').showModal(); });
 $('calendar-prev').addEventListener('click', () => moveCalendar(-1)); $('calendar-next').addEventListener('click', () => moveCalendar(1));
 $('calendar-report').addEventListener('click', () => openMonthlyReport(calendarMonth));
+$('report-period').addEventListener('change',e=>{if(e.target.value==='week')openWeeklyReport(dateKey(new Date(now())));else openMonthlyReport($('report-month').value);});
+$('report-week').addEventListener('change',e=>{if(e.target.value)openWeeklyReport(e.target.value);});
 $('report-month').addEventListener('change', e => { if (e.target.value) openMonthlyReport(e.target.value); });
 $('break-kind').addEventListener('change', e => { const custom = e.target.value === '自定义'; $('break-custom-label').hidden = !custom; $('break-custom').required = custom; });
 $('break-form').addEventListener('submit', e => { e.preventDefault(); try { const f = new FormData(e.currentTarget); addCurrentBreak(state, { minutes: Number(f.get('minutes')), name: f.get('kind') === '自定义' ? f.get('custom') : f.get('kind') }, now()); persist(); $('break-dialog').close(); render(); renderLists(); toast('摸鱼时间已记下，工资照常增长'); } catch (error) { text('break-error', error.message); updateBreakCapacity(); } });
@@ -621,18 +636,15 @@ $('schedule-mode').addEventListener('change', () => {
   if (mode === 'alternating' && state.settings.scheduleMode !== 'alternating') form.elements.anchorKind.value = '';
   updateScheduleFields();
 });
-$('settings-form').addEventListener('submit', async e => { e.preventDefault(); try {
-  const f = new FormData(e.currentTarget), s = readSettingsForm(), first = !state.onboarded;
-  if (s.payDaysMode === 'auto') s.payDays = plannedPayDays(dateKey(new Date(now())), s);
-  const result = saveSettings(state, s, f.get('salaryFrom'), now());
-  state.onboarded = true; state.reminder ??= { enabled: false, enabledAt: null, delivered: {} };
-  const enabled = f.get('reminder') === 'on'; if (enabled && !state.reminder.enabled) state.reminder.enabledAt = now(); state.reminder.enabled = enabled;
-  if (!await persist()) throw Error('保存未完成，请保持窗口打开并重试');
-  render(); renderLists(); syncPayDaysForm();
-  text('salary-effective-note', salaryForDate(state, dateKey(new Date(now()))) !== state.settings.salary ? `已安排下次生效工资 ${money(state.settings.salary)}；今天仍按 ${money(salaryForDate(state, dateKey(new Date(now()))))}。` : '今天生效会重算今天工资；明天生效保留今天记录。');
-  text('settings-feedback', result.changed ? `已保存，工资从 ${result.effectiveDate} 生效。${result.recalculated ? '今天工资、净额及目标池已重算。' : f.get('salaryFrom') === 'today' ? '今天尚无上班记录，新记录按此工资计算。' : '今天保持原工资，明天新记录生效。'}` : '设置已保存。');
-  if (first) { showView('dashboard'); toast('考勤和到手工资记好了，开始上班吧。'); }
-} catch (error) { text('settings-feedback', error.message); } });
+$('settings-form').addEventListener('submit',async event=>{event.preventDefault();try{
+  const settings=readSettingsForm(),first=!state.onboarded,stamp=now(),today=dateKey(new Date(stamp)),enabled=$('reminder-enabled').checked;
+  if(settings.payDaysMode==='auto')settings.payDays=plannedPayDays(today,settings);
+  if(!first&&settings.salary!==salaryForDate(state,today)){salaryEditor.open(settings,enabled);return;}
+  const next=structuredClone(state),baseline=JSON.stringify(state),result=saveSettings(next,settings,'today',stamp);
+  next.onboarded=true;next.reminder??={enabled:false,enabledAt:null,delivered:{}};if(enabled&&!next.reminder.enabled)next.reminder.enabledAt=stamp;next.reminder.enabled=enabled;
+  await calendarContext.commit(next,baseline);populateSettings();text('settings-feedback',first?`已保存，首次工资从 ${result.effectiveDate} 生效。`:'设置已保存。');
+  if(first){showView('dashboard');toast('考勤和到手工资记好了，开始上班吧。');}
+}catch(error){text('settings-feedback',error.message);}});
 $('export-data').addEventListener('click', async () => { try { await saveTail; const result = await api.exportData(structuredClone(state)); if (!result.canceled) toast('备份已保存到选择的位置'); } catch (e) { toast(e.message); } });
 async function bootstrap() {
   try {
@@ -644,7 +656,7 @@ async function bootstrap() {
     state.onboarded ??= Object.keys(state.days).length > 0;
     state.reminder ??= { enabled: false, enabledAt: null, delivered: {} };
     if (loaded.error) toast(`${loaded.error}，原文件已保留，当前更改无法覆盖它。`);
-    const initial = JSON.stringify(state); const upgradedPayDays = migratePayDays(state, now()); settle(state, now());
+    const initial = JSON.stringify(state); const upgradedPayDays = migratePayDays(state, now()); migrateOvertimeExclusions(state,now()); settle(state, now());
     const upgradedGoal = migrateGoal(state, now());
     if (upgradedGoal) toast('目标已升级：保留名称和金额，从今天的净收入开始积累。');
     else if (upgradedPayDays) toast('计薪天数已按当月考勤计算，已记录日期保持原口径。');

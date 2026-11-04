@@ -1,6 +1,6 @@
 {
   "name": "wonangfei",
-  "version": "0.3.3",
+  "version": "0.3.4",
   "private": true,
   "description": "窝囊费：本地计薪、成本与摸鱼记录",
   "main": "desktop/main.cjs",
@@ -8,7 +8,8 @@
     "start": "electron .",
     "test": "node --test tests/*.test.mjs",
     "smoke": "node scripts/run-salary-smoke.mjs",
-    "smoke:calendar": "node scripts/run-calendar-smoke.mjs"
+    "smoke:calendar": "node scripts/run-calendar-smoke.mjs",
+    "smoke:hotfix": "node scripts/run-hotfix-smoke.mjs"
   },
   "devDependencies": {
     "electron": "45.2.1",

@@ -1,12 +1,13 @@
-import { at, dateKey, localDate, monthKey, uid, isDateKey, isWorkday, isAbsent, calendarPolicy, emptyState, settingsForDay, validateSettings, validateState, effectivePayDays, dayStats, monthStats, monthlyReport, attendanceStatus, goalStats } from './model.mjs';
+import { at, dateKey, localDate, monthKey, uid, isDateKey, isWorkday, isAbsent, calendarPolicy, emptyState, settingsForDay, backfillSalaryForDate, repriceAutomaticMonth, validateSettings, validateState, effectivePayDays, dayStats, monthStats, monthlyReport, attendanceStatus, goalStats } from './model.mjs';
 
-export const KIND_LABELS = Object.freeze({ work: '上班', overtime: '加班', leave: '请假', swap: '调休' });
+export const KIND_LABELS = Object.freeze({ work: '上班', overtime: '休息日加班', leave: '请假', swap: '调休',rest:'休息' });
 const copy = value => value === undefined ? null : structuredClone(value);
 const snapshot = (state, key) => ({ day: copy(state.days[key]), plan: copy(state.dayPlans?.[key]) });
 const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 const finite = Number.isFinite;
 function baseSettings(state, key) {
   const settings = structuredClone(state.days[key]?.settings ?? settingsForDay(state, key));
+  if (!state.days[key]) settings.salary = backfillSalaryForDate(state, key);
   delete settings.calendarDate; delete settings.calendarIsWorkday;
   return settings;
 }
@@ -54,11 +55,11 @@ function restate(state, key, now) {
   const month = monthKey(key), saved = state.monthlyReviews?.snapshots?.[month];
   if (saved) state.monthlyReviews.snapshots[month] = { ...monthlyReport(state, month, saved.asOf), recalculatedAt: now };
 }
-function commit(state, next, key, action, now, undoOf) {
+function commit(state, next, key, action, now, undoOf, payrollChanges=[]) {
   const before = snapshot(state, key), after = snapshot(next, key);
-  if (same(before, after)) return { changed: false };
-  next.version = 2;
-  (next.calendarAudit ??= []).push({ id: uid(), date: key, action, changedAt: now, before, after, ...(undoOf ? { undoOf } : {}) });
+  if (same(before, after)&&!payrollChanges.length) return { changed: false };
+  next.version = Math.max(next.version, 2);
+  (next.calendarAudit ??= []).push({ id: uid(), date: key, action, changedAt: now, before, after, ...(undoOf ? { undoOf } : {}),...(payrollChanges.length?{payrollChanges}: {}) });
   validateState(next); Object.assign(state, next); return { changed: true, date: key };
 }
 export function editCalendarDay(state, input, now = Date.now()) {
@@ -67,13 +68,19 @@ export function editCalendarDay(state, input, now = Date.now()) {
   if (input.reset === true) {
     if (!future || state.days[key]) throw Error('已有实际记录不能直接清空；请使用预览修改或撤销');
     if (next.dayPlans) delete next.dayPlans[key];
-    return commit(state, next, key, 'edit', now);
+    return commit(state, next, key, 'edit', now,undefined,repriceAutomaticMonth(next,key,now));
   }
-  if (!['work','overtime','leave','swap'].includes(input.kind) || !['standard','unpaid','custom'].includes(input.payMode)) throw Error('请选择当天类型和薪资处理');
+  if (!['work','overtime','leave','swap','rest'].includes(input.kind) || !['standard','unpaid','custom'].includes(input.payMode)) throw Error('请选择当天类型和薪资处理');
+  if(input.kind==='rest'&&input.payMode!=='unpaid')throw Error('休息不记录基础工资，请假或调休可单独确认工资处理');
   if (input.kind === 'overtime' && input.payMode !== 'unpaid') throw Error('加班基础收入不增长，加班费在下班时另记');
   if (typeof input.includeOvertimePay !== 'boolean') throw Error('请明确是否保留已有加班费计入收入');
   if (input.payMode === 'custom' && (!finite(input.amount) || input.amount <= 0 || input.amount > 1e9)) throw Error('自定补薪须大于 0 且不超过 10 亿');
   const settings = state.days[key] ? baseSettings(state, key) : input.settings ? structuredClone(input.settings) : baseSettings(state, key);
+  if (input.salaryCorrection !== undefined) {
+    const correction = input.salaryCorrection;
+    if (future || !state.days[key] || correction?.confirmed !== true || !finite(correction.salary) || correction.salary < 0 || correction.salary > 1e9) throw Error('请明确确认此日工资修正，金额须为 0 至 10 亿');
+    settings.salary = correction.salary;
+  }
   if (!state.days[key] && !future && key < today && input.confirmedBackfill !== true) throw Error('空白历史没有薪资和工时快照，请核对后勾选补录确认');
   // Only a future single-day plan may change scheduled hours. Historical edits keep its captured schedule.
   if (future && input.schedule) Object.assign(settings, input.schedule);
@@ -81,12 +88,20 @@ export function editCalendarDay(state, input, now = Date.now()) {
   if (input.kind === 'overtime' && isWorkday(key,settings)) throw Error('基础工作日请保留上班类型，通过实际下班时间记录延时加班');
   if (input.payMode === 'standard' && isAbsent({kind:input.kind}) && !isWorkday(key, settings)) throw Error('基础休息日没有标准工资可保留，请选择不计薪或自定补薪');
   if (input.payMode === 'standard' && effectivePayDays(key, settings) <= 0) throw Error('基准计薪天数为 0，请选不计薪或自定补薪');
-  const plan = { kind: input.kind, payMode: input.payMode, amount: input.payMode === 'custom' ? input.amount : null, includeOvertimePay: input.includeOvertimePay, settings, updatedAt: now };
+  const previousPolicy=calendarPolicy(state,key),includeOvertimePay=future?true:input.includeOvertimePay;
+  const excludedOvertimePayIds=includeOvertimePay?[]:previousPolicy?.includeOvertimePay===false&&!input.refreshExcludedFees?previousPolicy.excludedOvertimePayIds??(state.days[key]?.overtimeDecisions??[]).filter(f=>f.clockOutAt<=previousPolicy.updatedAt).map(f=>f.id):(state.days[key]?.overtimeDecisions??[]).map(f=>f.id);
+  const plan = { kind: input.kind, payMode: input.payMode, amount: input.payMode === 'custom' ? input.amount : null, includeOvertimePay, ...(includeOvertimePay?{}:{excludedOvertimePayIds}), settings, updatedAt: now };if(!includeOvertimePay||input.kind==='rest')next.version=3;
   (next.dayPlans ??= {})[key] = plan;
   if (future) {
     if (input.record || input.records?.length || state.days[key]?.sessions.length) throw Error('未来只能安排计划，不能提前补录实际工时');
   } else {
     const day = next.days[key] ??= { settings: structuredClone(settings), sessions: [], fish: [], breaks: [] };
+    if(input.salaryMode!==undefined){if(!['manual','schedule'].includes(input.salaryMode))throw Error('请选择此日工资来源');if(!state.days[key]){day.salaryMode=input.salaryMode;next.version=3;}}
+    if (input.salaryCorrection && day.settings.salary !== settings.salary) {
+      (day.salaryCorrections ??= []).push({ id: uid(), changedAt: now, fromSalary: day.settings.salary, salary: settings.salary, source: 'calendar-confirmed' });
+      day.settings.salary = settings.salary;
+    }
+    if(input.salaryCorrection){day.salaryMode='manual';next.version=3;}
     day.calendar = structuredClone(plan);
     day.settings = { ...day.settings, calendarDate: key, calendarIsWorkday: !isAbsent(plan) };
     const records = input.records ?? (input.record ? [input.record] : []);
@@ -117,7 +132,8 @@ export function editCalendarDay(state, input, now = Date.now()) {
     }
     noOverlap(next, key); restate(next, key, now);
   }
-  return { ...commit(state, next, key, 'edit', now), needsFeeDecision:requiresDecision };
+  const payrollChanges=repriceAutomaticMonth(next,key,now);
+  return { ...commit(state, next, key, 'edit', now,undefined,payrollChanges), needsFeeDecision:requiresDecision,payrollChanges };
 }
 export function undoableCalendarChange(state, key) {
   const undone = new Set((state.calendarAudit ?? []).filter(e => e.action === 'undo').map(e => e.undoOf));
@@ -136,7 +152,7 @@ export function undoCalendarChange(state, key, now = Date.now()) {
   // Restore exact day snapshot. Only report aggregates are refreshed, with original cutoff retained.
   const month = monthKey(key), saved = next.monthlyReviews?.snapshots?.[month];
   if (saved) next.monthlyReviews.snapshots[month] = { ...monthlyReport(next, month, saved.asOf), recalculatedAt: now };
-  return commit(state, next, key, 'undo', now, target.entry.id);
+  return commit(state, next, key, 'undo', now, target.entry.id,repriceAutomaticMonth(next,key,now));
 }
 export function calendarImpact(before, after, key, now = Date.now()) {
   const future = key > dateKey(new Date(now)), forPreview = state => { const d=dayStats(state,key,now); return future ? {...d,net:0,expenses:0,fixed:0} : d; };

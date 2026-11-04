@@ -22,6 +22,7 @@ function validateCalendar(s) {
 const validMonth = key => typeof key === 'string' && isDateKey(`${key}-01`);
 export function validateSettings(s) {
   if (!s || !finite(s.salary) || s.salary < 0 || s.salary > 1e9) throw Error('月薪请输入 0 到 10 亿之间的数字');
+  if((s.payrollMonth!==undefined||s.payrollDays!==undefined)&&(!validMonth(s.payrollMonth)||!Number.isInteger(s.payrollDays)||s.payrollDays<0||s.payrollDays>31))throw Error('月度计薪分摊快照无效');
   validateCalendar(s);
   if ((s.calendarDate !== undefined || s.calendarIsWorkday !== undefined) && (!isDateKey(s.calendarDate) || typeof s.calendarIsWorkday !== 'boolean')) throw Error('单日排班设置无效');
   if (s.payDaysMode !== undefined && !['auto', 'manual'].includes(s.payDaysMode)) throw Error('请选择自动计薪或手动调整本月');
@@ -59,7 +60,11 @@ export function payDaysModeForDate(key, settings) {
   return settings.payDaysMode === 'manual' && settings.payDaysMonth === monthKey(key) ? 'manual' : 'auto';
 }
 export function effectivePayDays(key, settings) {
-  return payDaysModeForDate(key, settings) === 'auto' ? plannedPayDays(key, settings) : settings.payDays;
+  return payDaysModeForDate(key, settings) === 'auto' ? settings.payrollMonth===monthKey(key)?settings.payrollDays:plannedPayDays(key, settings) : settings.payDays;
+}
+export function payrollDaysForMonth(state,key,settings=state.settings){
+  const base={...settings};delete base.calendarDate;delete base.calendarIsWorkday;
+  return datesInMonth(key).filter(date=>{const policy=calendarPolicy(state,date);return policy?.kind==='work'?true:policy?.kind==='rest'?false:isWorkday(date,base);}).length;
 }
 export function settingsForDate(key, settings) {
   const copy = structuredClone(settings), mode = payDaysModeForDate(key, settings);
@@ -74,47 +79,110 @@ export function migratePayDays(state, now = Date.now()) {
   return true;
 }
 // Salary changes are an ordered audit ledger; future changes never mutate old days.
+export function salaryEvents(state) {
+  const cancelled=new Set((state.salaryCancellations??[]).map(c=>c.changeId)), initial=state.salaryBaseline?.source==='legacy-confirmed'?state.salaryBaseline.legacyChangeId:null;
+  return (state.salaryChanges??[]).map((c,index)=>({...c,index})).filter(c=>c.id!==initial&&!cancelled.has(c.id)).sort((a,b)=>a.effectiveDate.localeCompare(b.effectiveDate)||a.index-b.index);
+}
+export function salaryKnownForDate(state,key) {
+  const beginning=state.salaryBaseline?.effectiveDate??`${monthKey(state.trackingStart)}-01`;
+  return key >= [beginning,...salaryEvents(state).map(c=>c.effectiveDate)].sort()[0];
+}
 export function salaryForDate(state, key) {
-  let amount = state.salaryChanges?.[0]?.fromSalary ?? state.settings.salary;
-  for (const change of state.salaryChanges ?? []) if (change.effectiveDate <= key) amount = change.salary;
+  if(!salaryKnownForDate(state,key))return 0;
+  let amount = state.salaryBaseline?.salary ?? state.salaryChanges?.[0]?.fromSalary ?? state.settings.salary;
+  for (const change of salaryEvents(state)) if (change.effectiveDate <= key) amount = change.salary;
   return amount;
+}
+// A legacy 0 -> first salary ledger entry cannot prove whether zero was intentional.
+// Offer it only as an editable reference; never rewrite saved days or the ledger.
+export function initialSalaryReference(state) {
+  if (state.salaryBaseline) return { salary: state.salaryBaseline.salary, source: 'initial-setup' };
+  const first = state.salaryChanges?.[0];
+  if (first?.fromSalary === 0 && first.salary > 0 && dateKey(new Date(first.changedAt)) === state.trackingStart) return { salary: first.salary, source: 'legacy-reference' };
+  return null;
+}
+export function backfillSalaryForDate(state, key) {
+  const reference = initialSalaryReference(state);
+  return key >= `${monthKey(state.trackingStart)}-01` && key < state.trackingStart && !state.days[key] && reference?.source === 'legacy-reference' ? reference.salary : salaryForDate(state, key);
 }
 export function settingsForDay(state, key) {
   const plan = state.dayPlans?.[key], base = plan?.settings ?? state.settings;
   const copy = settingsForDate(key, { ...base, salary: salaryForDate(state, key) });
   if (plan) { copy.calendarDate = key; copy.calendarIsWorkday = !isAbsent(plan); }
+  if(payDaysModeForDate(key,copy)==='auto'){
+    const days=payrollDaysForMonth(state,key,copy);if(days!==plannedPayDays(key,copy)){copy.payrollMonth=monthKey(key);copy.payrollDays=days;}else{delete copy.payrollMonth;delete copy.payrollDays;}
+  }
   return copy;
 }
-export function saveSettings(state, input, salaryFrom = 'today', now = Date.now()) {
-  if (!finite(now) || !['today', 'tomorrow'].includes(salaryFrom)) throw Error('请选择工资从今天或明天生效');
+export function salaryIsManual(day) {
+  return day.salaryMode==='manual'||day.calendar?.payMode==='custom'||day.salaryMode===undefined&&day.sessions.some(s=>s.backfilled);
+}
+export function repriceAutomaticMonth(state,key,now=Date.now()){
+  const changes=[],month=monthKey(key);
+  for(const [date,day]of Object.entries(state.days)){
+    if(monthKey(date)!==month||salaryIsManual(day)||payDaysModeForDate(date,day.settings)!=='auto')continue;
+    const nextDays=payrollDaysForMonth(state,date,day.settings),beforeDays=effectivePayDays(date,day.settings);if(nextDays===beforeDays)continue;
+    const before=dayStats(state,date,now);day.settings.payrollMonth=month;day.settings.payrollDays=nextDays;
+    if(day.calendar){day.calendar.settings.payrollMonth=month;day.calendar.settings.payrollDays=nextDays;}
+    if(state.dayPlans?.[date]){state.dayPlans[date].settings.payrollMonth=month;state.dayPlans[date].settings.payrollDays=nextDays;}
+    (day.payrollCorrections??=[]).push({id:uid(),changedAt:now,sourceDate:key,fromDays:beforeDays,days:nextDays});
+    const after=dayStats(state,date,now);changes.push({date,fromDays:beforeDays,days:nextDays,earnedBefore:before.earned,earnedAfter:after.earned,netBefore:before.net,netAfter:after.net});
+    if(day.summary){const stats=dayStats(state,date,day.summary.clockOutAt);for(const field of ['earned','overtimePay','fish','overtime','actual','hourly'])day.summary[field]=stats[field];day.summary.net=stats.earned-day.summary.expenses-day.summary.fixed;day.summary.recalculatedAt=now;}
+  }
+  if(changes.length){state.version=3;state.payrollOverlayVersion=1;const saved=state.monthlyReviews?.snapshots?.[month];if(saved)state.monthlyReviews.snapshots[month]={...monthlyReport(state,month,saved.asOf),recalculatedAt:now};}
+  if(payDaysModeForDate(key,state.settings)==='auto'&&payrollDaysForMonth(state,key)!==plannedPayDays(key,state.settings)){state.version=3;state.payrollOverlayVersion=1;}
+  return changes;
+}
+function revalueSalaryDays(next,from,now,changeId) {
+  const affectedDates=[],protectedDates=[];
+  for(const [key,day]of Object.entries(next.days)) {
+    if(key<from)continue;
+    const salary=salaryForDate(next,key);
+    if(day.settings.salary===salary)continue;
+    if(salaryIsManual(day)){protectedDates.push(key);continue;}
+    const previous=day.settings.salary;day.settings.salary=salary;
+    if(day.calendar)day.calendar.settings.salary=salary;
+    if(next.dayPlans?.[key])next.dayPlans[key].settings.salary=salary;
+    (day.salaryCorrections??=[]).push({id:uid(),changedAt:now,fromSalary:previous,salary,source:'dated-adjustment',changeId});affectedDates.push(key);
+    if(day.summary){const stats=dayStats(next,key,day.summary.clockOutAt);for(const field of ['earned','overtimePay','fish','overtime','actual','hourly'])day.summary[field]=stats[field];day.summary.net=stats.earned-day.summary.expenses-day.summary.fixed;day.summary.recalculatedAt=now;}
+  }
+  for(const month of new Set(affectedDates.map(monthKey))){const saved=next.monthlyReviews?.snapshots?.[month];if(saved)next.monthlyReviews.snapshots[month]={...monthlyReport(next,month,saved.asOf),recalculatedAt:now};}
+  next.settings.salary=salaryForDate(next,dateKey(new Date(now)));
+  return {affectedDates:affectedDates.sort(),protectedDates:protectedDates.sort()};
+}
+export function saveSettings(state, input, salaryFrom = 'today', now = Date.now(), options={}) {
+  if (!finite(now) || !(['today', 'tomorrow'].includes(salaryFrom)||isDateKey(salaryFrom))) throw Error('请选择有效的工资生效日期');
   validateSettings(input);
   const key = dateKey(new Date(now));
   if (!isDateKey(key) || key < state.trackingStart) throw Error('工资生效日期无效，请检查本机时间');
   const next = structuredClone(state), tomorrow = localDate(key); tomorrow.setDate(tomorrow.getDate() + 1);
-  const effectiveDate = salaryFrom === 'today' ? key : dateKey(tomorrow);
-  const day = next.days[key], oldSalary = state.settings.salary;
-  const changed = input.salary !== oldSalary || salaryFrom === 'today' && (salaryForDate(state, key) !== input.salary || day && day.settings.salary !== input.salary);
+  const effectiveDate = salaryFrom === 'today' ? key : salaryFrom==='tomorrow'?dateKey(tomorrow):salaryFrom;
+  const initialized = state.onboarded !== true && !state.salaryBaseline && !state.salaryChanges?.length && Object.keys(state.days).length === 0;
+  let changed=!salaryKnownForDate(state,effectiveDate)||input.salary!==salaryForDate(state,effectiveDate);
   next.settings = structuredClone(input);
-  if (changed) {
-    (next.salaryChanges ??= []).push({ id: uid(), changedAt: now, effectiveDate, fromSalary: oldSalary, salary: input.salary });
-    if (salaryFrom === 'today' && day) {
-      // Revalue wages only: preserve schedule, paid-day denominator, all sessions and costs.
-      const previous = day.settings.salary; day.settings.salary = input.salary;
-      (day.salaryCorrections ??= []).push({ id: uid(), changedAt: now, fromSalary: previous, salary: input.salary });
-      if (day.summary) {
-        const stats = dayStats(next, key, day.summary.clockOutAt);
-        for (const field of ['earned', 'overtimePay', 'fish', 'overtime', 'actual', 'hourly']) day.summary[field] = stats[field];
-        day.summary.net = stats.earned - day.summary.expenses - day.summary.fixed;
-        day.summary.recalculatedAt = now;
-      }
-      const month = monthKey(key), saved = next.monthlyReviews?.snapshots[month];
-      if (saved) next.monthlyReviews.snapshots[month] = { ...monthlyReport(next, month, saved.asOf), recalculatedAt: now };
+  let impact={affectedDates:[],protectedDates:[]},changeId;
+  if (initialized) {
+    next.salaryBaseline = { salary: input.salary, effectiveDate:`${monthKey(key)}-01`, createdAt: now, source: 'initial-setup' };next.version=3;
+  } else if (changed) {
+    const legacy=initialSalaryReference(state);
+    if(legacy?.source==='legacy-reference'){
+      if(!['initial','actual-change'].includes(options.legacyChoice))throw Error('请确认旧档案首笔工资是首次填写，还是实际从零调薪');
+      next.salaryBaseline={salary:options.legacyChoice==='initial'?legacy.salary:0,effectiveDate:`${monthKey(state.trackingStart)}-01`,createdAt:now,source:options.legacyChoice==='initial'?'legacy-confirmed':'legacy-real-change',legacyChangeId:state.salaryChanges[0].id};
     }
+    const previousAtDate=next.salaryBaseline?salaryForDate(next,effectiveDate):salaryForDate(state,effectiveDate);
+    changeId=uid();(next.salaryChanges??=[]).push({id:changeId,changedAt:now,effectiveDate,fromSalary:previousAtDate,salary:input.salary,source:'dated-adjustment'});next.version=3;next.salaryTimelineVersion=1;
+    impact=revalueSalaryDays(next,effectiveDate,now,changeId);
   }
+  next.settings.salary=salaryForDate(next,key);
   const converted = convertLegacyFixed(next, key);
   validateState(next);
   Object.assign(state, next);
-  return { changed, effectiveDate, converted, recalculated: changed && salaryFrom === 'today' && !!day };
+  return { changed, initialized, effectiveDate: initialized ? `${monthKey(key)}-01` : effectiveDate, converted, recalculated:impact.affectedDates.length>0,changeId,...impact,nextChange:salaryEvents(next).find(c=>c.effectiveDate>effectiveDate)??null };
+}
+export function undoSalaryChange(state,changeId,now=Date.now()){
+  const change=state.salaryChanges?.find(c=>c.id===changeId&&c.source==='dated-adjustment');
+  if(!finite(now)||!change||state.salaryCancellations?.some(c=>c.changeId===changeId))throw Error('这笔工资调整不可撤销或已经撤销');
+  const next=structuredClone(state);(next.salaryCancellations??=[]).push({id:uid(),changeId,changedAt:now});next.version=3;next.salaryTimelineVersion=1;const impact=revalueSalaryDays(next,change.effectiveDate,now,changeId);validateState(next);Object.assign(state,next);return {...impact,effectiveDate:change.effectiveDate};
 }
 export const ratePerMs = (key, s) => { const days = effectivePayDays(key, s), duration = scheduledMs(key, s); return days > 0 && duration > 0 ? s.salary / days / duration : 0; };
 export function emptyState(now = new Date()) {
@@ -133,8 +201,15 @@ export function getDay(state, key, create = false) {
   }
   return state.days[key];
 }
-export const isAbsent = policy => ['leave', 'swap'].includes(policy?.kind);
+export const isAbsent = policy => ['leave', 'swap','rest'].includes(policy?.kind);
 export const calendarPolicy = (state, key) => state.days[key]?.calendar ?? state.dayPlans?.[key];
+export function migrateOvertimeExclusions(state,now=Date.now()){
+  const dates=new Set();for(const [key,policy]of [...Object.entries(state.dayPlans??{}),...Object.entries(state.days).filter(([,d])=>d.calendar).map(([k,d])=>[k,d.calendar])]){
+    if(policy.includeOvertimePay!==false||policy.excludedOvertimePayIds!==undefined)continue;
+    policy.excludedOvertimePayIds=(state.days[key]?.overtimeDecisions??[]).filter(f=>f.clockOutAt<=policy.updatedAt).map(f=>f.id);dates.add(key);
+  }
+  if(!dates.size)return false;state.version=3;state.overtimePolicyMigration={changedAt:now,dates:[...dates].sort()};return true;
+}
 export const earningRate = (key, day) => day?.calendar && day.calendar.payMode !== 'standard' ? 0 : ratePerMs(key, day.settings);
 export function paidIntervals(day, key, now) {
   if (!day || isAbsent(day.calendar) || !isWorkday(key, day.settings)) return [];
@@ -172,7 +247,7 @@ export function dayStats(state, key, now = Date.now()) {
   const merged = fishRanges.reduce((a, f) => { const prev = a.at(-1); if (prev && f[0] <= prev[1]) prev[1] = Math.max(prev[1], f[1]); else a.push([...f]); return a; }, []);
   const legacyFish = Math.min(elapsed, sum(paid.flatMap(p => merged.map(f => overlap(p, f)))));
   const fish = absent ? 0 : legacyFish + sum((day?.breaks ?? []).map(record => record.durationMs));
-  const overtimePay = policy?.includeOvertimePay === false ? 0 : sum((day?.overtimeDecisions ?? []).filter(entry => entry.clockOutAt <= now).map(entry => entry.amount));
+  const overtimePay = sum((day?.overtimeDecisions ?? []).filter(entry => entry.clockOutAt <= now && (policy?.includeOvertimePay!==false || (policy.excludedOvertimePayIds ? !policy.excludedOvertimePayIds.includes(entry.id) : entry.clockOutAt>policy.updatedAt))).map(entry => entry.amount));
   const payDays = effectivePayDays(key, s), standardDay = payDays > 0 ? s.salary / payDays : 0;
   const eligible = absent ? now >= at(key, s.end) : worked > 0;
   const calendarPay = policy && eligible && (absent && policy.payMode === 'standard' || policy.payMode === 'custom') ? policy.payMode === 'custom' ? policy.amount : standardDay : 0;
@@ -324,7 +399,7 @@ export function markReminderDelivered(state, reminder, now) {
 }
 export function attendanceStatus(state, key, now) {
   const day = state.days[key], policy = calendarPolicy(state, key);
-  if (isAbsent(policy) && key <= dateKey(new Date(now))) return { status: policy.kind, label: policy.kind === 'leave' ? '请假' : '调休' };
+  if (isAbsent(policy) && key <= dateKey(new Date(now))) return { status: policy.kind, label: {leave:'请假',swap:'调休',rest:'休息'}[policy.kind] };
   if (!day?.sessions.length) return null;
   if (policy?.kind === 'overtime' && dayStats(state,key,now).worked > 0) return { status: 'late', label: activeSession(state,key,now) ? '加班中' : '加班' };
   if (activeSession(state, key, now)) return now >= at(key, day.settings.end) ? { status: 'late', label: '加班中' } : { status: 'working', label: '进行中' };
@@ -352,11 +427,31 @@ export function fixedForDate(state, key) {
 export function monthStats(state, key, now = Date.now()) {
   const today = dateKey(new Date(now));
   const dates = datesInMonth(key).filter(d => d <= today);
+  return periodStats(state,dates,now);
+}
+export function periodStats(state,dates,now=Date.now()){
   const days = dates.map(d => dayStats(state, d, now));
   const total = field => sum(days.map(d => d[field]));
   const actual = total('actual'), earned = total('earned'), net = total('net');
   const workedDays = days.filter(day => day.worked > 0).length;
   return { earned, actual, worked: total('worked'), overtime: total('overtime'), overtimePay: total('overtimePay'), fish: total('fish'), elapsed: total('elapsed'), hourly: actual > 0 ? net / actual * 3600000 : null, secondly: actual > 0 ? net / actual * 1000 : null, expenses: total('expenses'), fixed: total('fixed'), net, averageDaily: workedDays > 0 ? net / workedDays : null, workedDays, recorded: dates.filter(d => state.days[d]?.sessions.length && !isAbsent(calendarPolicy(state,d))).length, dates, days };
+}
+export function overtimeComparison(stats){
+  const normal=stats.days.map(day=>({worked:Math.max(0,day.worked-day.overtime),actual:day.worked>0?day.actual*Math.max(0,day.worked-day.overtime)/day.worked:0}));
+  const actual=sum(normal.map(d=>d.actual)),workedDays=normal.filter(d=>d.worked>0).length,net=stats.net-stats.overtimePay;
+  return {overtime:stats.overtime,overtimePay:stats.overtimePay,baseline:{net,actual,workedDays,averageDaily:workedDays>0?net/workedDays:null,hourly:actual>0?net/actual*3600000:null,secondly:actual>0?net/actual*1000:null},actual:{net:stats.net,actual:stats.actual,workedDays:stats.workedDays,averageDaily:stats.averageDaily,hourly:stats.hourly,secondly:stats.secondly},fishAllocation:'proportional-to-worked-time'};
+}
+function attendanceCounts(state,stats,now){
+  const result={ontimeDays:0,lateDays:0,earlyDays:0,activeDays:0,leaveDays:0,swapDays:0};
+  for(const key of stats.dates){const status=attendanceStatus(state,key,now);if(!status)continue;if(activeSession(state,key,now))result.activeDays++;else{const field={ontime:'ontimeDays',late:'lateDays',early:'earlyDays',leave:'leaveDays',swap:'swapDays'}[status.status];if(field)result[field]++;}}
+  return result;
+}
+export function weeklyReport(state,key,now=Date.now()){
+  if(!isDateKey(key)||key>dateKey(new Date(now)))throw Error('请选择已发生的周');
+  const monday=localDate(key);monday.setDate(monday.getDate()-(monday.getDay()+6)%7);const dates=[];
+  for(let i=0;i<7;i++){const d=new Date(monday);d.setDate(d.getDate()+i);const date=dateKey(d);if(date<=dateKey(new Date(now)))dates.push(date);}
+  const stats=periodStats(state,dates,now),last=new Date(monday);last.setDate(last.getDate()+6);
+  return {period:'week',from:dateKey(monday),through:dateKey(last),asOf:now,...Object.fromEntries(['earned','overtimePay','expenses','fixed','net','worked','actual','fish','overtime','hourly','secondly','averageDaily','workedDays','recorded'].map(k=>[k,stats[k]])),costs:stats.expenses+stats.fixed,...attendanceCounts(state,stats,now),comparison:overtimeComparison(stats),provisional:dateKey(last)>=dateKey(new Date(now))};
 }
 export function monthlyReport(state, month, now) {
   if (!/^\d{4}-\d{2}$/.test(month) || !isDateKey(`${month}-01`)) throw Error('月份无效');
@@ -371,7 +466,7 @@ export function monthlyReport(state, month, now) {
     else if (status.status === 'leave') leaveDays++;
     else if (status.status === 'swap') swapDays++;
   }
-  return { month, asOf: now, earned: stats.earned, overtimePay: stats.overtimePay, expenses: stats.expenses, fixed: stats.fixed, costs: stats.expenses + stats.fixed, net: stats.net, worked: stats.worked, actual: stats.actual, fish: stats.fish, overtime: stats.overtime, hourly: stats.hourly, recorded: stats.recorded, leaveDays, swapDays, ontimeDays, lateDays, earlyDays, activeDays, provisional: activeDays > 0 || month >= dateKey(new Date(now)).slice(0, 7) };
+  return { month,period:'month', asOf: now, earned: stats.earned, overtimePay: stats.overtimePay, expenses: stats.expenses, fixed: stats.fixed, costs: stats.expenses + stats.fixed, net: stats.net, worked: stats.worked, actual: stats.actual, fish: stats.fish, overtime: stats.overtime, hourly: stats.hourly, secondly: stats.secondly, averageDaily: stats.averageDaily, workedDays: stats.workedDays, recorded: stats.recorded, leaveDays, swapDays, ontimeDays, lateDays, earlyDays, activeDays, comparison:overtimeComparison(stats),provisional: activeDays > 0 || month >= dateKey(new Date(now)).slice(0, 7) };
 }
 export function dueMonthlyReview(state, now) {
   const key = dateKey(new Date(now)), month = key.slice(0, 7);
@@ -471,8 +566,14 @@ export function convertLegacyFixed(state, key) {
   return legacy.length;
 }
 export function validateState(state) {
-  if (!state || ![1,2].includes(state.version) || !isDateKey(state.trackingStart)) throw Error('本地记录版本或日期无效');
+  if (!state || ![1,2,3].includes(state.version) || !isDateKey(state.trackingStart)) throw Error('本地记录版本或日期无效');
   validateSettings(state.settings);
+  if (state.salaryBaseline !== undefined && (!state.salaryBaseline || !finite(state.salaryBaseline.salary) || state.salaryBaseline.salary < 0 || state.salaryBaseline.salary > 1e9 || !finite(state.salaryBaseline.createdAt) || !isDateKey(state.salaryBaseline.effectiveDate) || !['initial-setup','legacy-confirmed','legacy-real-change'].includes(state.salaryBaseline.source) || state.salaryBaseline.source!=='initial-setup'&&!state.salaryChanges?.some(c=>c.id===state.salaryBaseline.legacyChangeId))) throw Error('首次工资参考无效');
+  if(state.payrollOverlayVersion!==undefined&&state.payrollOverlayVersion!==1)throw Error('月度分摊版本无效');
+  if(state.overtimePolicyMigration!==undefined&&(!finite(state.overtimePolicyMigration?.changedAt)||!Array.isArray(state.overtimePolicyMigration?.dates)||state.overtimePolicyMigration.dates.some(d=>!isDateKey(d))))throw Error('加班费迁移记录无效');
+  if(state.salaryTimelineVersion!==undefined&&state.salaryTimelineVersion!==1)throw Error('工资时间表版本无效');
+  if(state.version<3&&(state.salaryBaseline!==undefined||state.salaryTimelineVersion!==undefined||state.salaryCancellations!==undefined||state.payrollOverlayVersion!==undefined||state.overtimePolicyMigration!==undefined||state.settings?.payrollMonth!==undefined||Object.values(state.dayPlans??{}).some(p=>p.settings?.payrollMonth!==undefined||p.excludedOvertimePayIds!==undefined)||Object.values(state.days??{}).some(d=>d.salaryMode!==undefined||d.payrollCorrections!==undefined||d.settings?.payrollMonth!==undefined||d.calendar?.excludedOvertimePayIds!==undefined)))throw Error('工资日期规则需要新版格式，请使用新版应用');
+  if(state.salaryCancellations!==undefined&&(!Array.isArray(state.salaryCancellations)||state.salaryCancellations.length>10000||new Set(state.salaryCancellations.map(c=>c.changeId)).size!==state.salaryCancellations.length||state.salaryCancellations.some(c=>!c||typeof c.id!=='string'||!finite(c.changedAt)||!state.salaryChanges?.some(change=>change.id===c.changeId&&change.source==='dated-adjustment'))))throw Error('工资撤销记录无效');
   if (state.payDaysMigration !== undefined) {
     const migration = state.payDaysMigration;
     if (!migration || migration.version !== 1 || !finite(migration.changedAt) || !isDateKey(migration.from) || !migration.previousSettings || migration.previousSettings.payDaysMode !== undefined) throw Error('计薪升级记录无效');
@@ -499,13 +600,15 @@ export function validateState(state) {
   if (!state.days || typeof state.days !== 'object' || Object.keys(state.days).length > 20000 || !Array.isArray(state.expenses) || !Array.isArray(state.fixed) || state.expenses.length > 100000 || state.fixed.length > 10000) throw Error('本地记录结构无效');
   const earliestRecord = recordingStart(state);
   for (const [key, day] of Object.entries(state.days)) {
-    if (!isDateKey(key) || key < state.trackingStart && (state.version !== 2 || !day.calendar || !state.calendarAudit?.some(e=>e.date===key))) throw Error('打卡日期无效');
+    if(day.salaryMode!==undefined&&!['schedule','manual'].includes(day.salaryMode))throw Error('当日工资来源无效');
+    if (!isDateKey(key) || key < state.trackingStart && (state.version < 2 || !day.calendar || !state.calendarAudit?.some(e=>e.date===key))) throw Error('打卡日期无效');
     validateSettings(day.settings);
     if (day.calendar !== undefined) validateDayPolicy(day.calendar);
     for (const list of [day.sessions, day.fish]) {
       if (!Array.isArray(list) || list.length > 10000 || list.some(i => !finite(i.start) || (i.end !== null && (!finite(i.end) || i.end < i.start)) || i.start < at(key, '00:00') || (i.start >= at(dateKey(new Date(localDate(key).getTime() + 36e5 * 36)), '00:00') && !(list === day.sessions && i.resumed === true)))) throw Error('计时记录无效');
     }
     if (day.breaks !== undefined && (!Array.isArray(day.breaks) || day.breaks.length > 10000 || day.breaks.some(r => !r || typeof r.id !== 'string' || typeof r.name !== 'string' || !r.name.trim() || r.name.length > 40 || !finite(r.durationMs) || r.durationMs <= 0 || !finite(r.createdAt)))) throw Error('摸鱼时长记录无效');
+    if(day.payrollCorrections!==undefined&&(!Array.isArray(day.payrollCorrections)||day.payrollCorrections.length>10000||day.payrollCorrections.some(c=>!c||typeof c.id!=='string'||!finite(c.changedAt)||!isDateKey(c.sourceDate)||![c.fromDays,c.days].every(v=>finite(v)&&v>=0&&v<=31))))throw Error('月度分摊修正记录无效');
     if (day.salaryCorrections !== undefined && (!Array.isArray(day.salaryCorrections) || day.salaryCorrections.length > 10000 || day.salaryCorrections.some(c => !c || typeof c.id !== 'string' || !finite(c.changedAt) || ![c.fromSalary, c.salary].every(v => finite(v) && v >= 0 && v <= 1e9)))) throw Error('当日工资修正记录无效');
     if (day.startCorrections !== undefined && (!Array.isArray(day.startCorrections) || day.startCorrections.length > 10000 || day.startCorrections.some(r => !r || typeof r.id !== 'string' || !Number.isInteger(r.sessionIndex) || r.sessionIndex < 0 || r.sessionIndex >= day.sessions.length || !finite(r.from) || !finite(r.to) || dateKey(new Date(r.from)) < key || dateKey(new Date(r.from)) !== dateKey(new Date(r.to)) || !finite(r.correctedAt)))) throw Error('上班修正记录无效');
     if (day.overtimeDecisions !== undefined) {
@@ -532,13 +635,16 @@ export function validateState(state) {
   if (state.monthlyReviews !== undefined) {
     const reviews = state.monthlyReviews;
     if (!reviews || !reviews.shown || !reviews.snapshots || Object.entries(reviews.shown).some(([key, stamp]) => !/^\d{4}-\d{2}$/.test(key) || !finite(stamp)) || Object.entries(reviews.snapshots).some(([key, report]) => report?.month !== key || !finite(report.asOf) || !['earned', 'expenses', 'fixed', 'costs', 'net', 'worked', 'actual', 'fish', 'overtime'].every(field => finite(report[field])) || (report.hourly !== null && !finite(report.hourly)))) throw Error('月报记录无效');
+    if(Object.values(reviews.snapshots).some(r=>r.comparison!==undefined&&(!r.comparison||!['baseline','actual'].every(k=>r.comparison[k]&&['averageDaily','hourly','secondly'].every(f=>r.comparison[k][f]===null||finite(r.comparison[k][f]))&&finite(r.comparison[k].net)&&finite(r.comparison[k].actual)&&Number.isInteger(r.comparison[k].workedDays)))))throw Error('加班均薪对比无效');
     if (Object.values(reviews.snapshots).some(report => report.recalculatedAt !== undefined && !finite(report.recalculatedAt))) throw Error('月报重算时间无效');
     if (Object.values(reviews.snapshots).some(report => report.overtimePay !== undefined && (!finite(report.overtimePay) || report.overtimePay < 0))) throw Error('月报加班费无效');
+    if (Object.values(reviews.snapshots).some(report => ['secondly','averageDaily'].some(field => report[field] !== undefined && report[field] !== null && !finite(report[field])) || report.workedDays !== undefined && (!Number.isInteger(report.workedDays) || report.workedDays < 0))) throw Error('月报平均值无效');
   }
   return state;
 }
 
 function validateDayPolicy(p) {
-  if (!p || !['work','overtime','leave','swap'].includes(p.kind) || p.kind === 'overtime' && p.payMode !== 'unpaid' || !['standard','unpaid','custom'].includes(p.payMode) || typeof p.includeOvertimePay !== 'boolean' || (p.payMode === 'custom' && (!finite(p.amount) || p.amount <= 0 || p.amount > 1e9)) || !finite(p.updatedAt)) throw Error('请明确选择当天类型与薪资处理');
+  if (!p || !['work','overtime','leave','swap','rest'].includes(p.kind) || ['overtime','rest'].includes(p.kind) && p.payMode !== 'unpaid' || !['standard','unpaid','custom'].includes(p.payMode) || typeof p.includeOvertimePay !== 'boolean' || (p.payMode === 'custom' && (!finite(p.amount) || p.amount <= 0 || p.amount > 1e9)) || !finite(p.updatedAt)) throw Error('请明确选择当天类型与薪资处理');
+  if(p.excludedOvertimePayIds!==undefined&&(!Array.isArray(p.excludedOvertimePayIds)||p.excludedOvertimePayIds.some(id=>typeof id!=='string')))throw Error('原加班费选择无效');
   validateSettings(p.settings);
 }
