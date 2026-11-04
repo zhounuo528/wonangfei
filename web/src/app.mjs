@@ -1,3 +1,5 @@
+import { configureClockInReminder, dueClockInReminder, markClockInReminderDelivered, clockInReminderRelevant } from './model.mjs';
+import { shiftClock } from './shift-clock.mjs';
 import { createAboutUI } from './about-ui.mjs';
 import { createSalaryEditor } from './salary-ui.mjs';
 import { createTimeEditor } from './time-editor.mjs';
@@ -20,6 +22,7 @@ let saveFailed = false,settingsFormBaseline;
 let state, period = 'day', currentView = 'dashboard', mini = false, pinned = false, confirmAction, toastTimer;
 let saveTail = Promise.resolve(), saveRevision = 0, liveSnapshot, housekeeper, tickHousekeeper;
 let checkingReminder = false, reminderRetryAfter = 0;
+let checkingClockIn = false, clockInRetryAfter = 0, queuedClockIn;
 let calendarMonth, calendarDetailKey, calendarSignature;
 let calendarEditor, timeEditor, salaryEditor;
 let checkingMonthlyReview = false, monthlyRetryAfter = 0, queuedReminder, queuedMonthlyReview;
@@ -164,6 +167,7 @@ function populateSettings() {
   updateScheduleFields();
   updateLunchFields();
   $('reminder-enabled').checked = !!state.reminder?.enabled;
+  $('clock-in-reminder-enabled').checked = !!state.clockInReminder?.enabled;
   $('legacy-allocation-note').hidden = !state.fixed.some(item => item.allocation === 'calendar' && !item.until);
   settingsFormBaseline=JSON.stringify([...new FormData(form)]);
 }
@@ -203,6 +207,24 @@ function syncPayDaysForm() {
     if (automatic) form.elements.payDays.value = '';
     text('pay-days-note', error.message);
   }
+}
+async function maybeClockInReminder() {
+  if (checkingClockIn || !isVisible() || Date.now() < clockInRetryAfter || document.querySelector('dialog[open]')) return;
+  if (queuedClockIn) {
+    const queued = queuedClockIn; queuedClockIn = null;
+    if (queued.state === state && clockInReminderRelevant(state, queued.reminder, now())) { $('clock-in-reminder-dialog').showModal(); return; }
+  }
+  const reminder = dueClockInReminder(state, now()); if (!reminder) return;
+  checkingClockIn = true; const markedState = state;
+  if (!markClockInReminderDelivered(markedState, reminder, now())) { checkingClockIn = false; return; }
+  try {
+    const saved = await persist();
+    if (!saved) { delete markedState.clockInReminder.delivered[reminder.date]; clockInRetryAfter = Date.now() + 30000; return; }
+    if (state === markedState && clockInReminderRelevant(state, reminder, now())) {
+      queuedClockIn = { state: markedState, reminder };
+      if (isVisible() && !document.querySelector('dialog[open]')) { queuedClockIn = null; $('clock-in-reminder-dialog').showModal(); }
+    }
+  } finally { checkingClockIn = false; }
 }
 async function maybeRemind() {
   if (checkingReminder || !isVisible() || Date.now() < reminderRetryAfter || document.querySelector('dialog[open]')) return;
@@ -311,9 +333,10 @@ function render() {
   const stamp = now(), time = new Date(stamp), todayKey = dateKey(time), shift = activeShift(state, stamp), key = workContextKey(stamp), day = getDay(state, key), d = dayStats(state, key, stamp), m = monthStats(state, todayKey, stamp), g = goalStats(state, stamp);
   const running = !!shift, overtime = running && (d.policy?.kind === 'overtime' || stamp >= at(key, d.settings.end)), inPaid = windows(key, d.settings).some(([a, b]) => stamp >= a && stamp < b), isLunch = running && !inPaid && stamp >= at(key, d.settings.start) && !overtime;
   const absent = isAbsent(d.policy);
-  const status = absent ? `${d.policy.kind === 'leave' ? '请假' : '调休'} · 原时段保留归档` : running ? (overtime ? d.policy?.kind === 'overtime' ? '加班中 · 基础工资不增长' : '加班中 · 工资已封顶' : isLunch ? '午休中 · 暂停计薪' : stamp < at(key, d.settings.start) ? '等待上班时间' : '正在上班') : day?.summary ? '已下班 · 辛苦了' : stamp >= at(key, d.settings.end) ? '今日排班已结束' : '尚未开始';
-  const finished = !running && !!day?.summary, finishedOvertime = finished && d.overtime > 0;
-  const countdown = overtime || finishedOvertime ? d.overtime : finished ? 0 : isWorkday(key, d.settings) ? Math.max(0, at(key, d.settings.end) - stamp) : 0;
+  const clock = shiftClock(state, stamp), waiting = !running, targetDate = clock.key ? new Date(clock.start).toLocaleDateString('zh-CN', { month: 'numeric', day: 'numeric', weekday: 'short' }) : '';
+  const absentName = { leave: '请假', swap: '调休', rest: '休息' }[d.policy?.kind];
+  const status = absent ? `今日${absentName} · 原时段保留归档` : running ? (overtime ? d.policy?.kind === 'overtime' ? '加班中 · 基础工资不增长' : '加班中 · 工资已封顶' : isLunch ? '午休中 · 暂停计薪' : stamp < at(key, d.settings.start) ? '等待上班时间' : '正在上班') : day?.sessions.length ? '已下班 · 辛苦了' : clock.mode === 'due' ? '上班时间已到 · 尚未开始' : clock.mode === 'unscheduled' ? '暂无上班安排' : !isWorkday(key, d.settings) ? '今日休息' : '尚未开始';
+  const countdown = clock.milliseconds;
   const hidden = state.display === 'hidden';
   paintCharacter(d.net, hidden, overtime);
   const goalIncludesDay = !!state.goalPool && key >= state.goalPool.from;
@@ -327,11 +350,10 @@ function render() {
   document.querySelector('.hero').classList.toggle('uncovered', !hidden && state.display === 'today' && d.net < 0);
   text('hero-caption', hidden ? '安心专注，金额已隐藏。' : goalMode ? goalPresentation(g.pool, g.status).caption : state.display === 'month' ? `本月工资毛收入 · ${m.workedDays} 个有工时日；净赚见明细。` : '已扣除今日花销与固定负担。');
   text('work-status', status); paintAverages(d, m);
-  text('shift-label-text', absent ? d.policy.kind === 'leave' ? '今日请假' : '今日调休' : overtime ? '已加班' : finishedOvertime ? '加班已结束' : finished ? '已下班' : '距离下班'); text('shift-end', isWorkday(key, d.settings) ? d.settings.end : '休息日'); text('countdown', duration(countdown));
-  text('shift-progress-label', overtime ? '加班按实际时长累计' : finishedOvertime ? '本班次已结束' : d.policy?.payMode && d.policy.payMode !== 'standard' ? '计划工时进度' : '计薪工时进度');
-  text('shift-percent', overtime ? '无预设上限' : finishedOvertime ? '已结算' : `${Math.min(100, d.elapsed / d.planned * 100).toFixed(1)}%`); $('shift-progress').value = Math.min(100, d.elapsed / d.planned * 100); $('shift-progress').hidden = overtime || finishedOvertime || absent;
-  text('shift-summary', overtime ? '加班这么久，领导肯定很器重你吧。' : `上班 ${d.settings.start} · ${d.settings.lunch ? `午休 ${d.settings.lunchStart}–${d.settings.lunchEnd}` : '不扣午休'}`);
-  const afterShift = !!day?.sessions.length && stamp >= at(key, d.settings.end);
+  text('shift-label-text', clock.label); text('shift-end', waiting ? clock.key ? `${clock.key === todayKey ? '今天' : clock.key.slice(5).replace('-', '/')} ${clock.settings.start}` : '到日历安排' : d.settings.end); text('countdown', countdown === null ? '—' : duration(countdown));
+  text('shift-progress-label', waiting ? clock.mode === 'due' ? '尚未开始上班' : '下一次上班安排' : overtime ? '加班按实际时长累计' : d.policy?.payMode && d.policy.payMode !== 'standard' ? '计划工时进度' : '计薪工时进度');
+  text('shift-percent', waiting ? clock.mode === 'unscheduled' ? '待安排' : clock.kind === 'overtime' ? '休息日加班' : clock.mode === 'due' ? '等待开始' : '待上班' : overtime ? '无预设上限' : `${Math.min(100, d.elapsed / d.planned * 100).toFixed(1)}%`); $('shift-progress').value = Math.min(100, d.elapsed / d.planned * 100); $('shift-progress').hidden = waiting || overtime || absent;
+  text('shift-summary', waiting ? clock.mode === 'unscheduled' ? '还没有下一班，去日历安排一下。' : clock.mode === 'due' ? `今日计划 ${clock.settings.start}–${clock.settings.end}；点击开始后按计划时间补算。` : `${targetDate} ${clock.settings.start}–${clock.settings.end}${clock.kind === 'overtime' ? ' · 休息日加班' : ''}` : overtime ? '加班这么久，领导肯定很器重你吧。' : `上班 ${d.settings.start} · ${d.settings.lunch ? `午休 ${d.settings.lunchStart}–${d.settings.lunchEnd}` : '不扣午休'}`);
   const workLabel = running ? '下班，看看今天  ✓' : day?.sessions.length ? '起来加班  →' : '开始上班  →';
   text('work-toggle', absent ? '在日历调整这一天' : workLabel);
   $('work-toggle').disabled = absent; $('mini-work').disabled = absent;
@@ -355,8 +377,8 @@ function render() {
   // Price itself is a money value and is concealed in privacy mode too.
   $('purchase-amount').type = hidden ? 'password' : 'number';
   amountText('mini-amount', hidden ? '••••••' : goalMode ? goalPresentation(g.pool, g.status).value : `¥${number(state.display === 'month' ? m.earned : d.net)}`);
-  text('mini-time-label', absent ? d.policy.kind === 'leave' ? '请假' : '调休' : overtime ? '已加班' : finishedOvertime ? '加班已结束' : finished ? '已下班' : '距下班'); text('mini-time-value', duration(countdown)); text('mini-time-status', status); $('mini-progress').value = d.elapsed / d.planned * 100; $('mini-progress').hidden = overtime || finishedOvertime || absent;
-  document.body.classList.toggle('overtime-mode', overtime); document.body.classList.toggle('overtime-ended', finishedOvertime);
+  text('mini-time-label', clock.miniLabel); text('mini-time-value', countdown === null ? '—' : duration(countdown)); text('mini-time-status', waiting && clock.key ? `${clock.mode === 'due' ? '今日计划' : '下次'} ${clock.key === todayKey ? '今天' : clock.key.slice(5).replace('-', '/')} ${clock.settings.start}${clock.kind === 'overtime' ? ' · 休息日加班' : ''}` : status); $('mini-progress').value = d.elapsed / d.planned * 100; $('mini-progress').hidden = waiting || overtime || absent;
+  document.body.classList.toggle('overtime-mode', overtime); document.body.classList.remove('overtime-ended');
   text('mini-work', running ? '下班' : day?.sessions.length ? '起来加班' : '开始上班');
   text('tray-gross', money(d.earned)); text('tray-costs', money(d.fixed + d.expenses)); text('tray-net', money(d.net));
   text('date-label', `${time.toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' })} · 本机时间`);
@@ -578,7 +600,7 @@ const calendarContext = { state:()=>state, now, money, duration, toast, ask, edi
   if(!await saveTail)throw failure;calendarSignature=null;render();renderLists();
 }};
 calendarEditor=createCalendarEditor(calendarContext);timeEditor=createTimeEditor(calendarContext);
-salaryEditor=createSalaryEditor({...calendarContext,saved:message=>{populateSettings();text('settings-feedback',message);toast(message);}});
+salaryEditor=createSalaryEditor({...calendarContext,clockInEnabled:()=>$('clock-in-reminder-enabled').checked,saved:message=>{populateSettings();text('settings-feedback',message);toast(message);}});
 $('salary-date-edit').addEventListener('click',()=>{try{if(!$('settings-form').reportValidity())return;salaryEditor.open(readSettingsForm(),$('reminder-enabled').checked);}catch(error){text('settings-feedback',error.message);}});
 $('salary-date-undo').addEventListener('click',()=>salaryEditor.open(state.settings,state.reminder.enabled,true));
 document.querySelectorAll('[data-close]').forEach(b => b.addEventListener('click', () => $(b.dataset.close).close()));
@@ -632,7 +654,7 @@ $('settings-form').addEventListener('submit',async event=>{event.preventDefault(
   if(settings.payDaysMode==='auto')settings.payDays=plannedPayDays(today,settings);
   if(!first&&settings.salary!==salaryForDate(state,today)){salaryEditor.open(settings,enabled);return;}
   const next=structuredClone(state),baseline=JSON.stringify(state),result=saveSettings(next,settings,'today',stamp);
-  next.onboarded=true;next.reminder??={enabled:false,enabledAt:null,delivered:{}};if(enabled&&!next.reminder.enabled)next.reminder.enabledAt=stamp;next.reminder.enabled=enabled;
+  next.onboarded=true;next.reminder??={enabled:false,enabledAt:null,delivered:{}};if(enabled&&!next.reminder.enabled)next.reminder.enabledAt=stamp;next.reminder.enabled=enabled;configureClockInReminder(next,$('clock-in-reminder-enabled').checked,stamp);
   await calendarContext.commit(next,baseline);populateSettings();text('settings-feedback',first?`已保存，首次工资从 ${result.effectiveDate} 生效。`:'设置已保存。');
   if(first){showView('dashboard');toast('考勤和到手工资记好了，开始上班吧。');}
 }catch(error){text('settings-feedback',error.message);}});
@@ -683,7 +705,7 @@ async function bootstrap() {
       const before = JSON.stringify(state.days); settle(state, now());
       if (before !== JSON.stringify(state.days)) persist();
       if (isVisible()) render();
-      maybeRemind().then(maybeGoalCompletion).then(maybeMonthlyReview);
+      maybeClockInReminder().then(maybeRemind).then(maybeGoalCompletion).then(maybeMonthlyReview);
       const nextKey = dateKey(new Date(now()));
       if (document.documentElement.dataset.day !== nextKey) { document.documentElement.dataset.day = nextKey; renderLists(); }
       if (currentView === 'settings' && payDaysFormMonth !== monthKey(nextKey)) syncPayDaysForm();

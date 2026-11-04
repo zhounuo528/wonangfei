@@ -397,6 +397,30 @@ export function markReminderDelivered(state, reminder, now) {
   state.reminder.delivered[reminder.date] = { scheduledEnd: reminder.scheduledEnd, deliveredAt: now };
   return true;
 }
+export function configureClockInReminder(state, enabled, now) {
+  if (typeof enabled !== 'boolean' || !finite(now)) throw Error('上班打卡提醒设置无效');
+  if (!state.clockInReminder && !enabled) return;
+  const reminder = state.clockInReminder ??= { enabled: false, enabledAt: null, delivered: {} };
+  if (enabled && !reminder.enabled) reminder.enabledAt = now;
+  reminder.enabled = enabled;
+}
+export function clockInReminderRelevant(state, reminder, now) {
+  const r=state.clockInReminder, key=dateKey(new Date(now));
+  if (!r?.enabled || !finite(r.enabledAt) || !finite(now) || key < state.trackingStart || activeShift(state,now)) return false;
+  const day=state.days[key],policy=calendarPolicy(state,key),settings=day?.settings??settingsForDay(state,key);
+  if (day?.sessions.length || isAbsent(policy) || !isWorkday(key,settings) && !['work','overtime'].includes(policy?.kind)) return false;
+  const start=at(key,settings.start),end=at(key,settings.end);
+  return reminder.date===key && reminder.scheduledStart===start && r.enabledAt<=start && now>=start && now<end;
+}
+export function dueClockInReminder(state, now) {
+  const key=dateKey(new Date(now)),settings=state.days[key]?.settings??settingsForDay(state,key),reminder={date:key,scheduledStart:at(key,settings.start)};
+  return state.clockInReminder?.delivered[key] || !clockInReminderRelevant(state,reminder,now) ? null : reminder;
+}
+export function markClockInReminderDelivered(state, reminder, now) {
+  if (!clockInReminderRelevant(state,reminder,now) || state.clockInReminder.delivered[reminder.date]) return false;
+  state.clockInReminder.delivered[reminder.date]={scheduledStart:reminder.scheduledStart,deliveredAt:now};
+  return true;
+}
 export function attendanceStatus(state, key, now) {
   const day = state.days[key], policy = calendarPolicy(state, key);
   if (isAbsent(policy) && key <= dateKey(new Date(now))) return { status: policy.kind, label: {leave:'请假',swap:'调休',rest:'休息'}[policy.kind] };
@@ -635,6 +659,10 @@ export function validateState(state) {
   if (state.reminder !== undefined) {
     const r = state.reminder;
     if (!r || typeof r.enabled !== 'boolean' || (r.enabledAt !== null && !finite(r.enabledAt)) || (r.enabled && r.enabledAt === null) || !r.delivered || typeof r.delivered !== 'object' || Object.entries(r.delivered).some(([key, entry]) => !isDateKey(key) || !finite(entry?.scheduledEnd) || !finite(entry?.deliveredAt))) throw Error('下班提醒设置无效');
+  }
+  if (state.clockInReminder !== undefined) {
+    const r=state.clockInReminder;
+    if(!r||typeof r.enabled!=='boolean'||r.enabledAt!==null&&!finite(r.enabledAt)||r.enabled&&r.enabledAt===null||!r.delivered||typeof r.delivered!=='object'||Array.isArray(r.delivered)||Object.keys(r.delivered).length>20000||Object.entries(r.delivered).some(([key,entry])=>!isDateKey(key)||!finite(entry?.scheduledStart)||!finite(entry?.deliveredAt)))throw Error('上班打卡提醒设置无效');
   }
   if (state.monthlyReviews !== undefined) {
     const reviews = state.monthlyReviews;

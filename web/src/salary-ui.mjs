@@ -1,12 +1,12 @@
-import { dateKey, monthStats, goalStats, saveSettings, undoSalaryChange, salaryEvents, initialSalaryReference, settleGoal, validateState } from './model.mjs';
+import { dateKey, monthStats, goalStats, saveSettings, undoSalaryChange, salaryEvents, initialSalaryReference, settleGoal, validateState, configureClockInReminder } from './model.mjs';
 const $=id=>document.getElementById(id);
 export function createSalaryEditor(ctx){
-  let input,reminder,candidate,baseline,saving=false,undoId;
+  let input,reminder,clockInEnabled,candidate,baseline,saving=false,undoId;
   const form=$('salary-change-form');
   function invalidate(){candidate=null;$('salary-change-save').disabled=true;$('salary-change-impact').hidden=true;$('salary-change-error').textContent='';}
   function latest(){return salaryEvents(ctx.state()).filter(c=>c.source==='dated-adjustment').sort((a,b)=>a.index-b.index).at(-1);}
   function open(settings,enabled,undo=false){
-    input=structuredClone(settings);reminder=enabled;undoId=undo?latest()?.id:null;
+    input=structuredClone(settings);reminder=enabled;clockInEnabled=ctx.clockInEnabled?.()??!!ctx.state().clockInReminder?.enabled;undoId=undo?latest()?.id:null;
     if(undo&&!undoId){ctx.toast('没有可撤销的日期调薪');return;}
     form.reset();invalidate();const state=ctx.state(),today=dateKey(new Date(ctx.now()));
     $('salary-change-title').textContent=undo?'撤销上次日期调薪':'这份工资，何时生效？';
@@ -21,7 +21,7 @@ export function createSalaryEditor(ctx){
       if(!form.reportValidity())return;
       const state=ctx.state(),next=structuredClone(state),stamp=ctx.now(),date=$('salary-change-date').value;
       const result=undoId?undoSalaryChange(next,undoId,stamp):saveSettings(next,input,date,stamp,{legacyChoice:new FormData(form).get('legacyChoice')});
-      if(!undoId){next.reminder??={enabled:false,enabledAt:null,delivered:{}};if(reminder&&!next.reminder.enabled)next.reminder.enabledAt=stamp;next.reminder.enabled=reminder;}
+      if(!undoId){next.reminder??={enabled:false,enabledAt:null,delivered:{}};if(reminder&&!next.reminder.enabled)next.reminder.enabledAt=stamp;next.reminder.enabled=reminder;configureClockInReminder(next,clockInEnabled,stamp);}
       settleGoal(next,stamp);validateState(next);
       const months=[...new Set([date.slice(0,7),...result.affectedDates.map(k=>k.slice(0,7))])].sort();
       const body=$('salary-impact-months');body.replaceChildren();
