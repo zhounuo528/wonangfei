@@ -12,6 +12,6 @@ Windows 安装器 7zip 完整性通过，解包的程序是 PE x64，无 Authent
 
 最终 ARM 包也通过实际 0.3.0 模型生成的档案升级和完整重启，薪资、固定费用、摸鱼、加班费及已完成目标保留，旧演示归档逐字节不变。0.3.3 旧模型及旧存储读取格式 3 时拒读并锁定，无法覆盖原文件，字节保持不变。回退仍需升级前备份，不能只替换应用或网页。旧首笔 0→工资须由用户判断是否首次填写，不自动重写手动历史；目标创建前的补记不进入目标池。
 
-限制：没有 Windows 实机或虚拟机、Intel Mac 实机、macOS Sequoia 15.x 真机验收；Rosetta 不能替代 Intel 实机。未用物理鼠标验证 Finder 双击或菜单栏；验证的是 LaunchServices 启动与 Tray API。未公证／无 Developer ID，Mac 仅 ad-hoc、DMG 未签名；Windows 未签名。匿名下载验收须待公开发布后进行。
+限制：没有 Windows 实机或虚拟机、Intel Mac 实机、macOS Sequoia 15.x 真机验收；Rosetta 不能替代 Intel 实机。未用物理鼠标验证 Finder 双击或菜单栏；验证的是 LaunchServices 启动与 Tray API。未公证／无 Developer ID，Mac 仅 ad-hoc、DMG 未签名；Windows 未签名。已验证匿名公开 Release 元数据与下载链接，GitHub 服务器完整 SHA-256 与本地文件一致；下载后可按 Release 附带清单复核。
 
-公开 Release 仍暂停。旧 0.3.3 保留为草稿与原附件，不覆盖。0.3.4 为本轮修复产物，网站没有部署，DNS 和用户安装未改动。
+[0.3.4 已公开为预发布体验版](https://github.com/zhounuo528/wonangfei/releases/tag/v0.3.4)，标签固定于已测试的源码提交 `14e21e8a107fe3a122594afe8ddd012ab7107c25`。旧 0.3.3 保留为草稿与原附件，不覆盖。网站未执行部署，DNS 和用户安装未改动。

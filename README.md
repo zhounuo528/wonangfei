@@ -16,13 +16,15 @@
 
 ## 下载与系统
 
-本轮 0.3.4 安装包准备验收；公开发布仍暂停。旧 0.3.3 已撤回为草稿，附件保留不覆盖。旧 v0.3.0 与 v0.2.1 保留。
+[下载 v0.3.4 预发布体验版](https://github.com/zhounuo528/wonangfei/releases/tag/v0.3.4)，对应源码提交 `14e21e8`。旧 0.3.3 保留为草稿，旧 v0.3.0 与 v0.2.1 保留，不覆盖旧附件。
 
 | 文件 | 适用设备 | 最低系统 |
 | --- | --- | --- |
-| `Wonangfei-Setup-0.3.4-x64.exe` | Windows x64 | Windows 10 |
-| `Wonangfei-0.3.4-mac-x64.dmg` | Intel Core i5/i7/i9 Mac | macOS 13 |
-| `Wonangfei-0.3.4-mac-arm64.dmg` | Apple Silicon / M 系列 Mac | macOS 13 |
+| [Wonangfei-Setup-0.3.4-x64.exe](https://github.com/zhounuo528/wonangfei/releases/download/v0.3.4/Wonangfei-Setup-0.3.4-x64.exe) | Windows x64 | Windows 10 |
+| [Wonangfei-0.3.4-mac-x64.dmg](https://github.com/zhounuo528/wonangfei/releases/download/v0.3.4/Wonangfei-0.3.4-mac-x64.dmg) | Intel Core i5/i7/i9 Mac | macOS 13 |
+| [Wonangfei-0.3.4-mac-arm64.dmg](https://github.com/zhounuo528/wonangfei/releases/download/v0.3.4/Wonangfei-0.3.4-mac-arm64.dmg) | Apple Silicon / M 系列 Mac | macOS 13 |
+
+[SHA-256 校验清单](https://github.com/zhounuo528/wonangfei/releases/download/v0.3.4/SHA256SUMS.txt)与[本轮验收说明](docs/VALIDATION-0.3.4.md)。
 
 Mac App 仅 ad-hoc 临时签名，未做 Developer ID 签名或 Apple 公证，DMG 未签名；Windows App 和安装器未签名。下载后可能被 Gatekeeper/SmartScreen 拦截，不要求关闭或绕过系统安全设置。
 
