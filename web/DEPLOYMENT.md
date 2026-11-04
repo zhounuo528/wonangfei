@@ -1,4 +1,4 @@
-# 网页 0.4.7 部署交接
+# 网页 0.4.8 部署交接
 
 源码位于仓库 web/，Node.js 22.12+，无前端 npm 依赖。源码部署 Root Directory=web，执行 npm run build，输出 dist，使用 web/vercel.json。
 
@@ -25,7 +25,7 @@
 
 ## 关于版本和检查更新
 
-网页 0.4.7 从构建生成版本模块和同源 `version.json`；待部署包必须在干净的固定提交上重新构建，确认 `sourceCommit` 与交接提交一致、`development=false`。源代码直读缺少生成文件不能当作可交付构建。网页检查不使用桌面 GitHub 版本号，CSP meta 和响应头均仅从 `connect-src none` 放宽为 `self`；`version.json` 设置 no-store。部署后核查该文件 JSON、版本、revision 与页面模块一致，测试当前版／新版／旧站点或离线错误，以及未保存设置阻止刷新。
+网页 0.4.8 从构建生成版本模块和同源 `version.json`；待部署包必须在干净的固定提交上重新构建，确认 `sourceCommit` 与交接提交一致、`development=false`。源代码直读缺少生成文件不能当作可交付构建。网页检查不使用桌面 GitHub 版本号，CSP meta 和响应头均仅从 `connect-src none` 放宽为 `self`；`version.json` 设置 no-store。部署后核查该文件 JSON、版本、revision 与页面模块一致，测试当前版／新版／旧站点或离线错误，以及未保存设置阻止刷新。
 
 新增统一日期修改时，默认不补扣原本未计入的历史固定负担。主动勾选会列出历史分摊或按当前项目计算的金额，再保存为当日快照；不重写其他日期。格式 4 的记录不能直接回到 0.4.4，先保留升级前和升级后备份，优先兼容的向前修复，不清空 IndexedDB 或强改格式号。
 

@@ -1,6 +1,7 @@
 import { at, dateKey, localDate, monthKey, uid, isDateKey, isWorkday, isAbsent, calendarPolicy, emptyState, settingsForDay, backfillSalaryForDate, repriceAutomaticMonth, validateSettings, validateState, effectivePayDays, fixedItemForDate, fixedForDate, plannedPayDays, dayStats, monthStats, monthlyReport, attendanceStatus, goalStats } from './model.mjs';
 
 export const KIND_LABELS = Object.freeze({ work: '上班', overtime: '休息日加班', leave: '请假', swap: '调休',rest:'休息' });
+export const SCHEDULE_FIELDS = Object.freeze(['start','end','lunch','lunchStart','lunchEnd']);
 const copy = value => value === undefined ? null : structuredClone(value);
 const dailyExpenses=(state,key)=>state.expenses.filter(e=>e.scope!=='month'&&e.date===key);
 const snapshot = (state, key, costs=false) => ({ day: copy(state.days[key]), plan: copy(state.dayPlans?.[key]),...(costs?{expenses:copy(dailyExpenses(state,key))}:{}) });
@@ -104,17 +105,24 @@ export function editCalendarDay(state, input, now = Date.now()) {
     settings.salary = correction.salary;
   }
   if (!state.days[key] && !future && key < today && input.confirmedBackfill !== true) throw Error('空白历史没有薪资和工时快照，请核对后勾选补录确认');
-  // Only a future single-day plan may change scheduled hours. Historical edits keep its captured schedule.
-  if (future && input.schedule) Object.assign(settings, input.schedule);
+  // Schedule corrections may change only hours, keeping the captured salary,
+  // pay-day denominator and attendance cycle independent of current settings.
+  let schedule;
+  if (input.schedule !== undefined) {
+    if (!input.schedule || typeof input.schedule !== 'object' || Array.isArray(input.schedule)) throw Error('请填写有效的当天计划排班');
+    schedule=Object.fromEntries(SCHEDULE_FIELDS.filter(field=>Object.hasOwn(input.schedule,field)).map(field=>[field,input.schedule[field]]));
+    Object.assign(settings,schedule);
+  }
   delete settings.calendarDate; delete settings.calendarIsWorkday; validateSettings(settings);
   if (input.kind === 'overtime' && isWorkday(key,settings)) throw Error('基础工作日请保留上班类型，通过实际下班时间记录延时加班');
   if (input.payMode === 'standard' && isAbsent({kind:input.kind}) && !isWorkday(key, settings)) throw Error('基础休息日没有标准工资可保留，请选择不计薪或自定补薪');
   if (input.payMode === 'standard' && effectivePayDays(key, settings) <= 0) throw Error('基准计薪天数为 0，请选不计薪或自定补薪');
-  const previousPolicy=calendarPolicy(state,key);if(preserve&&(!state.days[key]||future||input.kind!==(previousPolicy?.kind??'work')||input.payMode!==(previousPolicy?.payMode??'standard')||input.amount!==(previousPolicy?.amount??undefined)&&input.payMode==='custom'||input.salaryCorrection!==undefined||input.schedule!==undefined))throw Error('修改时间与费用时不能同时改写当天安排');
+  const previousPolicy=calendarPolicy(state,key);if(preserve&&(!state.days[key]||future||input.kind!==(previousPolicy?.kind??'work')||input.payMode!==(previousPolicy?.payMode??'standard')||input.amount!==(previousPolicy?.amount??undefined)&&input.payMode==='custom'||input.salaryCorrection!==undefined||input.includeOvertimePay!==(previousPolicy?.includeOvertimePay!==false)))throw Error('修改排班、时间与费用时不能同时改写当天类型和工资规则');
+  const keepArrangement=preserve||!!(schedule&&!future&&state.days[key]&&!input.salaryCorrection&&input.kind===(previousPolicy?.kind??'work')&&input.payMode===(previousPolicy?.payMode??'standard')&&(input.payMode!=='custom'||input.amount===previousPolicy.amount)&&input.includeOvertimePay===(previousPolicy?.includeOvertimePay!==false));
   const includeOvertimePay=future?true:input.includeOvertimePay;
   const excludedOvertimePayIds=includeOvertimePay?[]:previousPolicy?.includeOvertimePay===false&&!input.refreshExcludedFees?previousPolicy.excludedOvertimePayIds??(state.days[key]?.overtimeDecisions??[]).filter(f=>f.clockOutAt<=previousPolicy.updatedAt).map(f=>f.id):(state.days[key]?.overtimeDecisions??[]).map(f=>f.id);
   const plan = { kind: input.kind, payMode: input.payMode, amount: input.payMode === 'custom' ? input.amount : null, includeOvertimePay, ...(includeOvertimePay?{}:{excludedOvertimePayIds}), settings, updatedAt: now };if(!includeOvertimePay||input.kind==='rest')next.version=Math.max(next.version,3);
-  if(!preserve)(next.dayPlans ??= {})[key] = plan;
+  if(!keepArrangement)(next.dayPlans ??= {})[key] = plan;
   if (future) {
     if (input.record || input.records?.length || state.days[key]?.sessions.length) throw Error('未来只能安排计划，不能提前补录实际工时');
   } else {
@@ -125,7 +133,11 @@ export function editCalendarDay(state, input, now = Date.now()) {
       day.settings.salary = settings.salary;
     }
     if(input.salaryCorrection){day.salaryMode='manual';next.version=Math.max(next.version,3);}
-    if(!preserve){day.calendar = structuredClone(plan);day.settings = { ...day.settings, calendarDate: key, calendarIsWorkday: !isAbsent(plan) };}
+    if(!keepArrangement){day.calendar = structuredClone(plan);day.settings = { ...day.settings, calendarDate: key, calendarIsWorkday: !isAbsent(plan) };}
+    if(schedule){
+      Object.assign(day.settings,schedule);
+      if(keepArrangement){if(day.calendar)Object.assign(day.calendar.settings,schedule);if(next.dayPlans?.[key])Object.assign(next.dayPlans[key].settings,schedule);}
+    }
     const records = input.records ?? (input.record ? [input.record] : []);
     if (!Array.isArray(records) || records.length > 10000 || new Set(records.filter(r=>r.sessionIndex!=='new').map(r=>r.sessionIndex)).size !== records.filter(r=>r.sessionIndex!=='new').length) throw Error('时段修改数据无效');
     const closing = [], changedIndexes = [];
@@ -155,8 +167,8 @@ export function editCalendarDay(state, input, now = Date.now()) {
     if(costs)editCosts(state,next,key,input,now);
     noOverlap(next, key); restate(next, key, now);
   }
-  const payrollChanges=preserve?[]:repriceAutomaticMonth(next,key,now);
-  return { ...commit(state, next, key, 'edit', now,undefined,payrollChanges,costs,preserve), needsFeeDecision:requiresDecision,payrollChanges };
+  const payrollChanges=keepArrangement?[]:repriceAutomaticMonth(next,key,now);
+  return { ...commit(state, next, key, 'edit', now,undefined,payrollChanges,costs,keepArrangement), needsFeeDecision:requiresDecision,payrollChanges };
 }
 export function undoableCalendarChange(state, key) {
   const undone = new Set((state.calendarAudit ?? []).filter(e => e.action === 'undo').map(e => e.undoOf));

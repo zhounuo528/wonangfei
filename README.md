@@ -1,16 +1,18 @@
 # 窝囊费
 
-本地桌面计薪与上班成本记录工具。当前源码为桌面 0.3.5-dev 和网页版 0.4.7，使用薄荷毛玻璃界面，支持 996 与全年无休，数据保存在本机，无需账号或业务联网。
+本地桌面计薪与上班成本记录工具。当前源码为桌面 0.3.5 和网页版 0.4.8，使用薄荷毛玻璃界面，支持 996 与全年无休，数据保存在本机，无需账号或业务联网。
 
 ![实际运行的新版首页，全部为虚拟数据](docs/screenshots/home.png)
 
 ## 本轮源码更新
 
+历史已有记录也能修改当天计划排班，与实际考勤分开；保留该日月薪与计薪天数，按修正后的计划时长折算标准日工资。保存前预览收入、工时、净额与目标影响，支持留档和安全撤销，其他日期不重写。
+
 版本、更新日志、Mac & Windows 下载和联系作者入口在所有主页面的共用信息栏显示，迷你窗也可访问。公开业务邮箱为 znzhounuo@outlook.com，链接只打开用户自己的邮件应用，不预填正文或发送邮件。
 
 未开始和下班后显示距离下一次上班，到点未开始显示「上班时间已到」；开始后才显示下班倒计时，加班继续正向计时。新增独立、默认关闭的应用内上班打卡提醒，按当日安排跳过请假、调休和休息，按日期保存去重；不自动打卡，不使用系统通知。详见 [倒计时与打卡提醒](docs/SHIFT-CLOCK.md)。
 
-设置底部新增「关于窝囊费」：可靠的构建版本、更新日志、Mac & Windows 版下载与手动检查更新。网页仅手动读取同源 `version.json`，新构建可主动刷新并阻止未保存设置／写入时刷新；桌面通过主进程读取 GitHub 公开发行列表，按系统和应用架构筛选，可选择包含公开体验版。不会自动下载或安装；现有安装包仍为 0.3.4，本轮只提交桌面开发源码。详见 [版本与手动更新](docs/ABOUT-UPDATES.md)。
+共用信息栏提供「关于窝囊费」：可靠的构建版本、更新日志、Mac & Windows 版下载与手动检查更新。网页仅手动读取同源 `version.json`，新构建可主动刷新并阻止未保存设置／写入时刷新；桌面通过主进程读取 GitHub 公开发行列表，按系统和应用架构筛选，可选择包含公开体验版。不会自动下载或安装；下载、签名与实测范围以对应 Release 说明为准。详见 [版本与手动更新](docs/ABOUT-UPDATES.md)。
 
 日历详情统一为「修改」入口，可一起修改上下班、多笔当日临时花销及是否计入当日固定负担。保存前预览，原记录留档并可安全撤销。补录无历史快照默认不补扣；主动勾选后列出按当前固定项目补计的金额，保存为仅此日生效的快照，不改其他日期。整月花销仍从费用管理调整。详见 [单日修改与格式 4](docs/DAY-EDIT.md)。
 
@@ -24,15 +26,15 @@
 
 ## 下载与系统
 
-[下载 v0.3.4 预发布体验版](https://github.com/zhounuo528/wonangfei/releases/tag/v0.3.4)，对应源码提交 `14e21e8`。旧 0.3.3 保留为草稿，旧 v0.3.0 与 v0.2.1 保留，不覆盖旧附件。
+[下载公开体验版](https://github.com/zhounuo528/wonangfei/releases)。本轮安装包版本为 0.3.5，固定提交、附件、校验与实际验收状态见对应 Release；旧版本保留，不覆盖附件。
 
-| 文件 | 适用设备 | 最低系统 |
+| 文件 | 适用设备 | 包声明最低系统 |
 | --- | --- | --- |
-| [Wonangfei-Setup-0.3.4-x64.exe](https://github.com/zhounuo528/wonangfei/releases/download/v0.3.4/Wonangfei-Setup-0.3.4-x64.exe) | Windows x64 | Windows 10 |
-| [Wonangfei-0.3.4-mac-x64.dmg](https://github.com/zhounuo528/wonangfei/releases/download/v0.3.4/Wonangfei-0.3.4-mac-x64.dmg) | Intel Core i5/i7/i9 Mac | macOS 13 |
-| [Wonangfei-0.3.4-mac-arm64.dmg](https://github.com/zhounuo528/wonangfei/releases/download/v0.3.4/Wonangfei-0.3.4-mac-arm64.dmg) | Apple Silicon / M 系列 Mac | macOS 13 |
+| Wonangfei-Setup-0.3.5-x64.exe | Windows x64 | Windows 10 |
+| Wonangfei-0.3.5-mac-x64.dmg | Intel Mac | macOS 13 |
+| Wonangfei-0.3.5-mac-arm64.dmg | Apple Silicon / M 系列 Mac | macOS 13 |
 
-[SHA-256 校验清单](https://github.com/zhounuo528/wonangfei/releases/download/v0.3.4/SHA256SUMS.txt)与[本轮验收说明](docs/VALIDATION-0.3.4.md)。
+SHA-256 清单与安装／验收说明随 Release 附件提供。Mac 原生、Rosetta 与 Intel 硬件测试应分别看待。
 
 Mac App 仅 ad-hoc 临时签名，未做 Developer ID 签名或 Apple 公证，DMG 未签名；Windows App 和安装器未签名。下载后可能被 Gatekeeper/SmartScreen 拦截，不要求关闭或绕过系统安全设置。
 
@@ -73,10 +75,10 @@ npm run smoke
 npm run smoke:calendar
 ```
 
-当前桌面源码 141 项单元测试、网页 143 项单元测试，分别在 UTC、上海、纽约通过；日历真实界面桌面 20 组、网页 19 组通过，工资与存储回归桌面 15 组、网页 17 组通过。只使用虚拟数据。`npm run smoke` 自动使用新临时虚拟档案，旧 GUI 脚本保留作历史证据。安装包当前为 0.3.4；两份最终 DMG 复制出的 arm64 原生应用和 x64 Rosetta 应用各通过 35 组打包检查。本轮没有生产网页部署。
+当前源码桌面 223、网页 222 项单元测试通过，历史计划修正两端各 11 组真实界面及原有功能回归通过。所有测试使用隔离虚拟档案。打包后验收范围和限制以本轮 Release 附件为准；旧版打包矩阵保留为历史证据，不能当作本轮新包验收。网页交由部署负责人操作，本轮不部署生产或修改 DNS。
 
 0.3.0 安装包的独立验证记录保留在 [旧版验收](docs/VALIDATION-0.3.0.md)，不能等同于当前源码打包验证。当前源码检查范围见 [日历验收汇总](docs/CALENDAR-VALIDATION.json)，旧版验收按原日期保留。Intel 硬件、macOS 15.x、Windows 安装运行、物理 Finder/Dock/菜单栏点击、Safari/Firefox 和实体手机仍未完成本轮验收。
 
 [构建方法](docs/BUILDING.md)和[迁移评估](docs/PORTABILITY.md)保留。构建脚本只接受正式 x.y.z 版本并拒绝覆盖已有产物。
 
-Latest packaged validation: [v0.3.4 matrix](docs/VALIDATION-0.3.4.json). Native arm64 and x64-under-Rosetta are distinct from Intel hardware testing.
+Previous packaged validation: [v0.3.4 matrix](docs/VALIDATION-0.3.4.json). Native arm64 and x64-under-Rosetta are distinct from Intel hardware testing.

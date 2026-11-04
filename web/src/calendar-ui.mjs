@@ -1,6 +1,6 @@
 import { renderTimeRows, readTimeRows, appendTimeRow, feeDecision, initFeeControls } from './time-rows.mjs';
 import { at, dateKey, monthKey, effectivePayDays, initialSalaryReference, salaryKnownForDate, payrollDaysForMonth, salaryIsManual, validateState, settleGoal } from './model.mjs';
-import { KIND_LABELS, calendarInfo, editCalendarDay, undoCalendarChange, undoableCalendarChange, calendarImpact } from './calendar.mjs';
+import { KIND_LABELS, calendarInfo, editCalendarDay, undoCalendarChange, undoableCalendarChange, calendarImpact, SCHEDULE_FIELDS } from './calendar.mjs';
 const $ = id => document.getElementById(id);
 const dt = stamp => { const d=new Date(stamp); return `${dateKey(d)}T${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`; };
 export function createCalendarEditor(ctx) {
@@ -22,7 +22,7 @@ export function createCalendarEditor(ctx) {
     $('calendar-actual-fields').hidden=!$('calendar-edit-times').checked||absence||info.future;
     $('calendar-edit-times').closest('label').hidden=!recorded;
     $('calendar-past-confirm-label').hidden=info.future||recorded;$('calendar-past-confirm').required=!info.future&&!recorded;
-    $('calendar-schedule-fields').hidden=recorded||base||absence;
+    $('calendar-schedule-fields').hidden=base||absence;
     const repairing=recorded&&!info.future&&$('calendar-wage-repair').checked,known=info.future||recorded;
     $('calendar-wage-inputs').hidden=known&&!repairing;$('calendar-salary-summary').hidden=!known;
     $('calendar-wage-repair-label').hidden=!recorded||info.future;$('calendar-wage-repair').disabled=!recorded||info.future;
@@ -63,7 +63,7 @@ export function createCalendarEditor(ctx) {
     if(!ctx.state().days[key]&&initialSalaryReference(ctx.state())?.source==='legacy-reference'&&key<ctx.state().trackingStart)input.salaryMode='manual';
     if(!info.future&&ctx.state().days[key]?.calendar?.includeOvertimePay===false&&$('calendar-keep-fee').checked===false)input.refreshExcludedFees=false;
     if(ctx.state().days[key]&&!info.future&&$('calendar-wage-repair').checked)input.salaryCorrection={salary:Number($('calendar-salary').value),confirmed:true};
-    if(info.future)input.schedule={start:fields.get('start'),end:fields.get('end'),lunch:fields.get('lunch')==='on',lunchStart:fields.get('lunchStart'),lunchEnd:fields.get('lunchEnd')};
+    if(info.future||SCHEDULE_FIELDS.some(field=>schedule[field]!==info.settings[field]))input.schedule=schedule;
     if(!info.future&&!['leave','swap','rest'].includes(kind)&&$('calendar-edit-times').checked)input.records=readTimeRows($('calendar-time-rows'));
     input.closeDecision=feeDecision('calendar');
     return input;

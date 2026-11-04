@@ -6,7 +6,7 @@ const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
 const {version}=JSON.parse(await fs.readFile(path.join(root,'package.json'),'utf8'));
 const output=path.join(root,`dist-release/v${version}`);
 const payload=path.join(output,'payload/Wonangfei-win32-x64');
-const compiler=path.join(root,'.installer-tools/nsis-bundle/makensis');
+const compiler=path.join(process.env.WONANGFEI_NSIS_DIR??path.join(root,'.installer-tools/nsis-bundle'),'makensis');
 const installer=path.join(output,`Wonangfei-Setup-${version}-x64.exe`);
 try{await fs.access(installer);throw Error('安装包已存在，停止覆盖');}catch(error){if(error.code!=='ENOENT')throw error;}
 async function walk(dir,relative=''){
@@ -48,7 +48,7 @@ VIAddVersionKey "ProductVersion" "${version}"
 VIAddVersionKey "LegalCopyright" "Wonangfei"
 !define MUI_ABORTWARNING
 !define MUI_WELCOMEPAGE_TITLE "欢迎安装窝囊费"
-!define MUI_WELCOMEPAGE_TEXT "让每一秒，都有一点回报。$\r$\n$\r$\n安装前请先退出已打开的窝囊费。程序只为当前用户安装。"
+!define MUI_WELCOMEPAGE_TEXT "让每一秒，都有一点回报。$\r$\n$\r$\n更新前请先导出 JSON 备份并退出已打开的窝囊费。格式 4 账本不能回退到 0.3.4。程序只为当前用户安装。"
 !define MUI_DIRECTORYPAGE_TEXT_TOP "请选择窝囊费专用的新目录或已有窝囊费安装目录。"
 !define MUI_FINISHPAGE_RUN "$INSTDIR\Wonangfei.exe"
 !define MUI_FINISHPAGE_RUN_TEXT "打开窝囊费"

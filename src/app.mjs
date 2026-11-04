@@ -544,7 +544,7 @@ function renderCalendarDetail(key) {
   const day=state.days[key],info=calendarInfo(state,key,now()),stats=dayStats(state,key,now());
   const start=day?.sessions.length?Math.min(...day.sessions.map(v=>v.start)):null,end=day?.sessions.length?Math.max(...day.sessions.map(v=>v.end??v.start)):null;
   const format=stamp=>stamp===null?'未记录':new Date(stamp).toLocaleString('zh-CN',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit',hour12:false});
-  text('calendar-detail-title',`${key} 的一天`);text('calendar-detail-status',info.label);text('calendar-detail-start',format(start));text('calendar-detail-end',activeSession(state,key,now())?'尚未点击下班':format(end));
+  text('calendar-detail-title',`${key} 的一天`);text('calendar-detail-plan',`${stats.settings.start}–${stats.settings.end}${stats.settings.lunch?` · 午休 ${stats.settings.lunchStart}–${stats.settings.lunchEnd}`:''}`);text('calendar-detail-status',info.label);text('calendar-detail-start',format(start));text('calendar-detail-end',activeSession(state,key,now())?'尚未点击下班':format(end));
   for(const field of ['earned','expenses','fixed','net'])text(`calendar-detail-${field}`,money(stats[field]));
   text('calendar-detail-overtime-pay',money(stats.overtimePay));text('calendar-detail-fish',duration(stats.fish));text('calendar-detail-overtime',duration(stats.overtime));text('calendar-detail-hourly',stats.hourly===null?'不可计算':`${money(stats.hourly)} / 小时`);
   text('calendar-detail-actual',duration(stats.actual));text('calendar-detail-secondly',stats.secondly===null?'不可计算':`${money(stats.secondly)} / 秒${state.display!=='hidden'&&stats.secondly>0&&stats.secondly<0.01?'（实际速率低于 ¥0.01/秒）':''}`);
