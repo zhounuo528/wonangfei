@@ -1,0 +1,21 @@
+import fs from 'node:fs/promises';
+import path from 'node:path';
+import { execFileSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+if (process.platform !== 'darwin') throw Error('Icon conversion uses the macOS built-in sips and iconutil tools');
+const source = process.argv[2] ? path.resolve(process.argv[2]) : path.join(root, 'src/icon-master.png'), directory = path.join(root, 'src/icons');
+await fs.access(source); await fs.mkdir(directory, { recursive: true });
+const sizes = [16, 24, 32, 48, 64, 128, 180, 192, 256, 512, 1024];
+for (const size of sizes) execFileSync('/usr/bin/sips', ['-z', String(size), String(size), source, '--out', path.join(directory, `cat-${size}.png`)], { stdio: 'ignore' });
+await fs.copyFile(path.join(directory, 'cat-1024.png'), path.join(root, 'src/app-icon.png'));
+const iconset = path.join(directory, 'Wonangfei.iconset'); await fs.mkdir(iconset, { recursive: true });
+for (const size of [16,32,128,256,512]) for (const scale of [1,2]) await fs.copyFile(path.join(directory, `cat-${size * scale}.png`), path.join(iconset, `icon_${size}x${size}${scale === 2 ? '@2x' : ''}.png`));
+execFileSync('/usr/bin/iconutil', ['-c', 'icns', iconset, '-o', path.join(directory, 'Wonangfei.icns')]);
+// Modern Windows ICO supports PNG frames; retain the supplied illustration unchanged.
+const icoSizes = [16,24,32,48,64,128,256], images = await Promise.all(icoSizes.map(size => fs.readFile(path.join(directory, `cat-${size}.png`))));
+const header = Buffer.alloc(6); header.writeUInt16LE(1,2); header.writeUInt16LE(images.length,4);
+let offset = 6 + images.length * 16;
+const entries = images.map((bytes,index) => { const entry = Buffer.alloc(16), size = icoSizes[index]; entry[0] = entry[1] = size === 256 ? 0 : size; entry.writeUInt16LE(1,4); entry.writeUInt16LE(32,6); entry.writeUInt32LE(bytes.length,8); entry.writeUInt32LE(offset,12); offset += bytes.length; return entry; });
+await fs.writeFile(path.join(directory, 'Wonangfei.ico'), Buffer.concat([header,...entries,...images]));
+console.log(JSON.stringify({ directory, sizes, mac: 'Wonangfei.icns', windows: 'Wonangfei.ico', scope: 'resource conversion only; no app packaging' }));

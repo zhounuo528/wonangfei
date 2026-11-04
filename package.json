@@ -1,6 +1,6 @@
 {
   "name": "wonangfei",
-  "version": "0.3.0",
+  "version": "0.3.1-dev",
   "private": true,
   "description": "窝囊费：本地计薪、成本与摸鱼记录 Demo",
   "main": "desktop/main.cjs",

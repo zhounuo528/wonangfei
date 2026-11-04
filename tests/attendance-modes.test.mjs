@@ -9,7 +9,7 @@ const { LocalStore } = createRequire(import.meta.url)('../desktop/storage.cjs');
 const date = '2028-02-01', all = [0, 1, 2, 3, 4, 5, 6], six = [1, 2, 3, 4, 5, 6];
 function fixture(mode = 'double') {
   const state = emptyState(new Date(at(date, '08:00'))); state.onboarded = true;
-  state.settings.salary = 17600; state.settings.payDays = 22; state.settings.scheduleMode = mode;
+  state.settings.salary = 17600; state.settings.payDays = 22; delete state.settings.payDaysMode; delete state.settings.payDaysMonth; state.settings.scheduleMode = mode;
   state.settings.weekdays = mode === 'everyday' ? [...all] : ['996', 'single'].includes(mode) ? [...six] : [1, 2, 3, 4, 5];
   if (mode === '996') state.settings.end = '21:00';
   state.demo = { time: at('2028-02-29', '22:00'), wall: Date.now() + 3600000 };

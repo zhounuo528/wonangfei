@@ -9,7 +9,7 @@ const { LocalStore } = createRequire(import.meta.url)('../desktop/storage.cjs');
 const key = '2026-11-03', hour = 3600000;
 function fixture(date = key) {
   const state = emptyState(new Date(at(date, '08:00')));
-  state.onboarded = true; state.settings.salary = 17600; state.settings.payDays = 22;
+  state.onboarded = true; state.settings.salary = 17600; state.settings.payDays = 22; delete state.settings.payDaysMode; delete state.settings.payDaysMonth;
   return state;
 }
 const close = (actual, expected) => assert.ok(Math.abs(actual - expected) < 1e-7, `${actual} ≈ ${expected}`);

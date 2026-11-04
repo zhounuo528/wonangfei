@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { emptyState, at, startWork, clockOut, correctStartTime, addExpense, addFixed, netIncomePool, validateState } from '../src/model.mjs';
 const key = '2026-11-03';
-function fixture() { const s = emptyState(new Date(at(key,'08:00'))); s.settings.salary=17600; s.settings.payDays=22; return s; }
+function fixture() { const s = emptyState(new Date(at(key,'08:00'))); s.settings.salary=17600; s.settings.payDays=22; delete s.settings.payDaysMode; delete s.settings.payDaysMonth; return s; }
 test('net pool includes creation day loss and next day profit: -100 plus 300 equals 200, with no repeated accumulation', () => {
   const s = fixture(); s.expenses.push({ id:'cost',name:'当日成本',date:key,amount:100 });
   assert.equal(netIncomePool(s,key,at(key,'18:00')).net,-100);
@@ -20,7 +20,7 @@ test('same-day live wages, backdated expenses and clock-in correction recalculat
   s.expenses=[]; assert.equal(netIncomePool(s,key,at(key,'11:30')).net,250);
 });
 test('pool crosses month boundaries, excludes earlier dates, charges elapsed unrecorded workday fixed costs only', () => {
-  const date='2026-10-30', s=emptyState(new Date(at(date,'08:00'))); s.settings.salary=17600; s.settings.payDays=22;
+  const date='2026-10-30', s=emptyState(new Date(at(date,'08:00'))); s.settings.salary=17600; s.settings.payDays=22; delete s.settings.payDaysMode; delete s.settings.payDaysMonth;
   addFixed(s,{name:'房租',amount:2200,period:'month',allocation:'workday'},date);
   startWork(s,at(date,'09:00')); clockOut(s,at(date,'18:00')); startWork(s,at(key,'09:00')); clockOut(s,at(key,'12:00'));
   const october=netIncomePool(s,date,at(date,'18:00'));

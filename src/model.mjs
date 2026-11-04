@@ -1,5 +1,5 @@
 // All dates are local civil dates; money is CNY, durations are milliseconds.
-export const DEFAULT_SETTINGS = Object.freeze({ salary: 12000, payDays: 21.75, scheduleMode: 'double', weekdays: [1, 2, 3, 4, 5], alternateWeekdays: [1, 2, 3, 4, 5, 6], anchorWeek: '2026-11-02', anchorKind: 'double', start: '09:00', end: '18:00', lunch: true, lunchStart: '12:00', lunchEnd: '13:00' });
+export const DEFAULT_SETTINGS = Object.freeze({ salary: 12000, payDays: 0, payDaysMode: 'auto', scheduleMode: 'double', weekdays: [1, 2, 3, 4, 5], alternateWeekdays: [1, 2, 3, 4, 5, 6], anchorWeek: '2026-11-02', anchorKind: 'double', start: '09:00', end: '18:00', lunch: true, lunchStart: '12:00', lunchEnd: '13:00' });
 export const dateKey = (date = new Date()) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 export const localDate = key => new Date(`${key}T00:00:00`);
 export const at = (key, time) => new Date(`${key}T${time}:00`).getTime();
@@ -12,13 +12,19 @@ const validTime = x => typeof x === 'string' && /^([01]\d|2[0-3]):[0-5]\d$/.test
 export function isDateKey(key) {
   return typeof key === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(key) && !Number.isNaN(localDate(key).getTime()) && dateKey(localDate(key)) === key;
 }
-export function validateSettings(s) {
-  if (!s || !finite(s.salary) || s.salary < 0 || s.salary > 1e9) throw Error('月薪请输入 0 到 10 亿之间的数字');
-  if (!finite(s.payDays) || s.payDays <= 0 || s.payDays > 31) throw Error('计薪天数必须大于 0 且不超过 31');
+function validateCalendar(s) {
   if (!Array.isArray(s.weekdays) || s.weekdays.some(d => !Number.isInteger(d) || d < 0 || d > 6)) throw Error('工作日设置无效');
   if (s.scheduleMode !== undefined && !['double', 'single', 'alternating', '996', 'everyday'].includes(s.scheduleMode)) throw Error('请选择双休、单休、大小周、996 或全年无休');
   if (s.scheduleMode === 'everyday' && (s.weekdays.length !== 7 || new Set(s.weekdays).size !== 7)) throw Error('全年无休须包含星期日至星期六，每天均为工作日');
   if (s.scheduleMode === 'alternating' && (!isDateKey(s.anchorWeek) || localDate(s.anchorWeek).getDay() !== 1 || !['double', 'single'].includes(s.anchorKind) || !Array.isArray(s.alternateWeekdays) || s.alternateWeekdays.some(d => !Number.isInteger(d) || d < 0 || d > 6))) throw Error('大小周须选择周一基准日期、该周单双休及两种工作日');
+}
+const validMonth = key => typeof key === 'string' && isDateKey(`${key}-01`);
+export function validateSettings(s) {
+  if (!s || !finite(s.salary) || s.salary < 0 || s.salary > 1e9) throw Error('月薪请输入 0 到 10 亿之间的数字');
+  validateCalendar(s);
+  if (s.payDaysMode !== undefined && !['auto', 'manual'].includes(s.payDaysMode)) throw Error('请选择自动计薪或手动调整本月');
+  if (!finite(s.payDays) || s.payDays > 31 || (s.payDaysMode === 'auto' ? s.payDays < 0 : s.payDays <= 0)) throw Error('手动计薪天数必须大于 0 且不超过 31');
+  if ((s.payDaysMode === 'manual' && !validMonth(s.payDaysMonth)) || (s.payDaysMonth !== undefined && !validMonth(s.payDaysMonth))) throw Error('计薪月份无效');
   if (!validTime(s.start) || !validTime(s.end) || s.end <= s.start) throw Error('下班时间须晚于上班时间；本版仅支持同日班次');
   if (typeof s.lunch !== 'boolean') throw Error('午休选项无效');
   if (s.lunch && (!validTime(s.lunchStart) || !validTime(s.lunchEnd) || s.lunchStart < s.start || s.lunchEnd > s.end || s.lunchEnd <= s.lunchStart)) throw Error('午休须在上班与下班之间，且结束晚于开始');
@@ -39,17 +45,42 @@ export function isWorkday(key, s) {
   return (double ? s.weekdays : s.alternateWeekdays).includes(localDate(key).getDay());
 }
 export const expenseForDate = (expense, key) => expense.scope === 'month' ? expense.month === monthKey(key) && expense.allocationDates.includes(key) ? expense.amount / expense.allocationDates.length : 0 : expense.date === key ? expense.amount : 0;
-export const ratePerMs = (key, s) => s.salary / s.payDays / scheduledMs(key, s);
+export function plannedPayDays(key, settings) {
+  if (!isDateKey(key)) throw Error('计薪日期无效');
+  validateCalendar(settings);
+  return datesInMonth(key).filter(date => isWorkday(date, settings)).length;
+}
+export function payDaysModeForDate(key, settings) {
+  if (settings.payDaysMode === undefined) return 'legacy';
+  return settings.payDaysMode === 'manual' && settings.payDaysMonth === monthKey(key) ? 'manual' : 'auto';
+}
+export function effectivePayDays(key, settings) {
+  return payDaysModeForDate(key, settings) === 'auto' ? plannedPayDays(key, settings) : settings.payDays;
+}
+export function settingsForDate(key, settings) {
+  const copy = structuredClone(settings), mode = payDaysModeForDate(key, settings);
+  if (mode !== 'legacy') { copy.payDaysMode = mode; copy.payDaysMonth = monthKey(key); copy.payDays = effectivePayDays(key, settings); }
+  return copy;
+}
+export function migratePayDays(state, now = Date.now()) {
+  if (state.settings.payDaysMode !== undefined) return false;
+  const key = dateKey(new Date(now));
+  state.payDaysMigration = { version: 1, changedAt: now, from: key, previousSettings: structuredClone(state.settings) };
+  state.settings = { ...state.settings, payDaysMode: 'auto', payDaysMonth: monthKey(key), payDays: plannedPayDays(key, state.settings) };
+  return true;
+}
+export const ratePerMs = (key, s) => { const days = effectivePayDays(key, s), duration = scheduledMs(key, s); return days > 0 && duration > 0 ? s.salary / days / duration : 0; };
 export function emptyState(now = new Date()) {
   const state = { version: 1, onboarded: false, trackingStart: dateKey(now), settings: structuredClone(DEFAULT_SETTINGS), days: {}, expenses: [], fixed: [], display: 'today', goal: null, reminder: { enabled: false, enabledAt: null, delivered: {} }, demo: null };
   const monday = new Date(now); monday.setDate(monday.getDate() - (monday.getDay() + 6) % 7); state.settings.anchorWeek = dateKey(monday);
+  state.settings = settingsForDate(dateKey(now), state.settings);
   return state;
 }
 export function clockNow(state, wall = Date.now()) {
   return new Date(state.demo ? state.demo.time + Math.max(0, wall - state.demo.wall) : wall);
 }
 export function getDay(state, key, create = false) {
-  if (!state.days[key] && create) state.days[key] = { settings: structuredClone(state.settings), sessions: [], fish: [], breaks: [] };
+  if (!state.days[key] && create) state.days[key] = { settings: settingsForDate(key, state.settings), sessions: [], fish: [], breaks: [] };
   return state.days[key];
 }
 export function paidIntervals(day, key, now) {
@@ -86,7 +117,8 @@ export function dayStats(state, key, now = Date.now()) {
   const baseEarned = elapsed * ratePerMs(key, s), earned = baseEarned + overtimePay, actual = Math.max(0, worked - fish);
   const expenses = sum(state.expenses.map(e => expenseForDate(e, key)));
   const fixed = fixedForDate(state, key);
-  return { earned, baseEarned, overtimePay, elapsed, worked, overtime, actual, fish, legacyFish, expenses, fixed, net: earned - expenses - fixed, hourly: actual > 0 ? earned / actual * 3600000 : null, secondly: actual > 0 ? earned / actual * 1000 : null, planned: scheduledMs(key, s), daily: s.salary / s.payDays, settings: s };
+  const payDays = effectivePayDays(key, s);
+  return { earned, baseEarned, overtimePay, elapsed, worked, overtime, actual, fish, legacyFish, expenses, fixed, net: earned - expenses - fixed, hourly: actual > 0 ? earned / actual * 3600000 : null, secondly: actual > 0 ? earned / actual * 1000 : null, planned: scheduledMs(key, s), daily: payDays > 0 ? s.salary / payDays : 0, payDays, settings: s };
 }
 export function activeSession(state, key, now) {
   const day = state.days[key];
@@ -367,6 +399,11 @@ export function convertLegacyFixed(state, key) {
 export function validateState(state) {
   if (!state || state.version !== 1 || !isDateKey(state.trackingStart)) throw Error('本地记录版本或日期无效');
   validateSettings(state.settings);
+  if (state.payDaysMigration !== undefined) {
+    const migration = state.payDaysMigration;
+    if (!migration || migration.version !== 1 || !finite(migration.changedAt) || !isDateKey(migration.from) || !migration.previousSettings || migration.previousSettings.payDaysMode !== undefined) throw Error('计薪升级记录无效');
+    validateSettings(migration.previousSettings);
+  }
   if (!['today', 'month', 'goal', 'hidden'].includes(state.display)) throw Error('金额显示模式无效');
   if (state.goal !== null) {
     validateGoalInput(state.goal);

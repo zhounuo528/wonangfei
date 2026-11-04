@@ -38,3 +38,8 @@ reference/
 deliverables/
 !docs/screenshots/
 !docs/screenshots/*.png
+
+# Browser build/profile outputs
+web/.test-browser/
+.vercel/
+handoff/

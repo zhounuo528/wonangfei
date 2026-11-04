@@ -5,7 +5,7 @@ import { at, emptyState, startWork, dayStats } from '../src/model.mjs';
 
 test('smooth presentation reads absolute timestamps; dropped frames, lunch and resume do not change pay', () => {
   const key = '2026-11-03', state = emptyState(new Date(at(key, '08:00')));
-  state.settings.salary = 17600; state.settings.payDays = 22; startWork(state, at(key, '09:00'));
+  state.settings.salary = 17600; state.settings.payDays = 22; delete state.settings.payDaysMode; delete state.settings.payDaysMonth; startWork(state, at(key, '09:00'));
   let stamp = at(key, '09:00'), nextId = 0;
   const frames = new Map(), values = [];
   const ticker = createTimestampTicker({ readClock: () => stamp, write: now => values.push(dayStats(state, key, now).earned), requestFrame: fn => { const id = ++nextId; frames.set(id, fn); return id; }, cancelFrame: id => frames.delete(id) });

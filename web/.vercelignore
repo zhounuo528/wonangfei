@@ -1,0 +1,7 @@
+*
+!src/
+!src/**
+!scripts/
+!scripts/build.mjs
+!package.json
+!vercel.json

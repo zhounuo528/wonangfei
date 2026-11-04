@@ -3,6 +3,7 @@ import { createTimestampTicker } from './live.mjs';
 import { formatAmount, formatCurrency, belowCentPerSecond, roundedMoney } from './money.mjs';
 import { formatWorkEquivalent } from './work-equivalent.mjs';
 import { createHoldStepper } from './hold-stepper.mjs';
+import { monthKey, plannedPayDays, payDaysModeForDate, migratePayDays } from './model.mjs';
 
 const $ = id => document.getElementById(id);
 const api = window.workday;
@@ -13,6 +14,7 @@ let calendarMonth, calendarDetailKey, calendarSignature;
 let checkingMonthlyReview = false, monthlyRetryAfter = 0, queuedReminder, queuedMonthlyReview;
 let correctionKey, correctionSaving = false, workActionBusy = false, pendingClockOut;
 let checkingGoal = false, goalRetryAfter = 0, queuedGoal;
+let payDaysFormMonth;
 const timeText = stamp => new Date(stamp).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false });
 const yuan = formatCurrency;
 const number = formatAmount;
@@ -140,6 +142,9 @@ function populateSettings() {
   form.elements.scheduleMode.value = state.settings.scheduleMode ?? 'double';
   form.elements.anchorWeek.value = state.settings.anchorWeek ?? emptyState(clockNow(state)).settings.anchorWeek;
   form.elements.anchorKind.value = state.settings.anchorKind ?? '';
+  const key = dateKey(new Date(now()));
+  payDaysFormMonth = monthKey(key);
+  form.elements.payDaysMode.value = payDaysModeForDate(key, state.settings) === 'manual' ? 'manual' : 'auto';
   updateScheduleFields();
   updateLunchFields();
   $('reminder-enabled').checked = !!state.reminder?.enabled;
@@ -158,7 +163,29 @@ function updateScheduleFields() {
     '996': '996 默认周一至周六、09:00–21:00，工作日和具体时间均可调整；午休按下方设置。',
     everyday: '每一天均为考勤工作日；上下班时间和午休请按实际设置。'
   };
-  text('schedule-note', `${notes[mode] ?? notes.double} 每月计薪天数仍按下方填写，不随模式自动改变。`);
+  text('schedule-note', notes[mode] ?? notes.double);
+  syncPayDaysForm();
+}
+function readSettingsForm() {
+  const form = $('settings-form'), f = new FormData(form);
+  return { salary: Number(f.get('salary')), payDays: Number(f.get('payDays')), payDaysMode: f.get('payDaysMode'), payDaysMonth: monthKey(dateKey(new Date(now()))), scheduleMode: f.get('scheduleMode'), weekdays: f.get('scheduleMode') === 'everyday' ? [0, 1, 2, 3, 4, 5, 6] : f.getAll('weekday').map(Number), alternateWeekdays: f.getAll('weekdayB').map(Number), anchorWeek: f.get('anchorWeek'), anchorKind: f.get('anchorKind'), start: f.get('start'), end: f.get('end'), lunch: f.get('lunch') === 'on', lunchStart: form.elements.lunchStart.value, lunchEnd: form.elements.lunchEnd.value };
+}
+function syncPayDaysForm() {
+  const form = $('settings-form'), key = dateKey(new Date(now())), month = monthKey(key);
+  if (payDaysFormMonth && payDaysFormMonth !== month) form.elements.payDaysMode.value = 'auto';
+  payDaysFormMonth = month;
+  const automatic = form.elements.payDaysMode.value === 'auto';
+  form.elements.payDays.readOnly = automatic;
+  text('pay-days-month', `${month.slice(0, 4)} 年 ${Number(month.slice(5))} 月`);
+  try {
+    const settings = readSettingsForm(), planned = plannedPayDays(key, settings);
+    if (automatic) form.elements.payDays.value = String(planned);
+    const days = automatic ? planned : Number(form.elements.payDays.value);
+    text('pay-days-note', planned === 0 ? '本月没有计划工作日，请先勾选工作日。' : !Number.isFinite(days) || days <= 0 || days > 31 ? '手动计薪天数须大于 0 且不超过 31。' : `本月计划 ${planned} 个工作日 · 日薪 ${money(settings.salary / days)}。${automatic ? '按所选考勤逐月重算。' : '手动调整仅用于本月，下月恢复自动。'}`);
+  } catch (error) {
+    if (automatic) form.elements.payDays.value = '';
+    text('pay-days-note', error.message);
+  }
 }
 async function maybeRemind() {
   if (checkingReminder || !isVisible() || Date.now() < reminderRetryAfter || document.querySelector('dialog[open]')) return;
@@ -627,6 +654,8 @@ $('goal-new').addEventListener('click', () => { $('goal-complete-dialog').close(
 document.querySelectorAll('input[name=amount],input[name=salary],#purchase-amount').forEach(input => input.addEventListener('blur', () => { if (input.value !== '' && Number.isFinite(Number(input.value))) input.value = Number(input.value).toFixed(2); }));
 $('goal-form').addEventListener('submit', e => { e.preventDefault(); try { const f = new FormData(e.currentTarget); saveGoal(state, { name: f.get('name').trim(), amount: Number(f.get('amount')) }, now()); persist(); $('goal-dialog').close(); render(); toast('目标记好了，每天净赚都往里攒'); } catch (error) { text('goal-error', error.message); } });
 $('settings-form').elements.lunch.addEventListener('change', updateLunchFields);
+$('settings-form').addEventListener('change', event => { if (['weekday', 'weekdayB', 'anchorWeek', 'anchorKind', 'payDaysMode'].includes(event.target.name)) syncPayDaysForm(); });
+for (const name of ['salary', 'payDays']) $('settings-form').elements[name].addEventListener('input', syncPayDaysForm);
 $('schedule-mode').addEventListener('change', () => {
   const form = $('settings-form'), mode = $('schedule-mode').value;
   document.querySelectorAll('#weekdays input').forEach(input => { input.checked = mode === 'everyday' || Number(input.value) >= 1 && Number(input.value) <= (['single', '996'].includes(mode) ? 6 : 5); });
@@ -634,7 +663,7 @@ $('schedule-mode').addEventListener('change', () => {
   if (mode === 'alternating' && state.settings.scheduleMode !== 'alternating') form.elements.anchorKind.value = '';
   updateScheduleFields();
 });
-$('settings-form').addEventListener('submit', e => { e.preventDefault(); try { const f = new FormData(e.currentTarget), s = { salary: Number(f.get('salary')), payDays: Number(f.get('payDays')), scheduleMode: f.get('scheduleMode'), weekdays: f.get('scheduleMode') === 'everyday' ? [0, 1, 2, 3, 4, 5, 6] : f.getAll('weekday').map(Number), alternateWeekdays: f.getAll('weekdayB').map(Number), anchorWeek: f.get('anchorWeek'), anchorKind: f.get('anchorKind'), start: f.get('start'), end: f.get('end'), lunch: f.get('lunch') === 'on', lunchStart: e.currentTarget.elements.lunchStart.value, lunchEnd: e.currentTarget.elements.lunchEnd.value }; validateSettings(s); const previous = state.settings, first = !state.onboarded; state.settings = s; let converted; try { converted = convertLegacyFixed(state, dateKey(new Date(now()))); } catch (error) { state.settings = previous; throw error; } state.onboarded = true; state.reminder ??= { enabled: false, enabledAt: null, delivered: {} }; const enabled = f.get('reminder') === 'on'; if (enabled && !state.reminder.enabled) state.reminder.enabledAt = now(); state.reminder.enabled = enabled; persist(); render(); text('settings-feedback', `已保存，已有日期和已保存分摊表保持原口径。${converted ? `${converted} 笔旧账单从今天起切到考勤工作日，之前历史保留。` : ''}`); if (first) { showView('dashboard'); toast('考勤和工资记好了，开始上班吧。'); } } catch (error) { text('settings-feedback', error.message); } });
+$('settings-form').addEventListener('submit', e => { e.preventDefault(); try { const f = new FormData(e.currentTarget), s = readSettingsForm(); if (s.payDaysMode === 'auto') s.payDays = plannedPayDays(dateKey(new Date(now())), s); validateSettings(s); const previous = state.settings, first = !state.onboarded; state.settings = s; let converted; try { converted = convertLegacyFixed(state, dateKey(new Date(now()))); } catch (error) { state.settings = previous; throw error; } state.onboarded = true; state.reminder ??= { enabled: false, enabledAt: null, delivered: {} }; const enabled = f.get('reminder') === 'on'; if (enabled && !state.reminder.enabled) state.reminder.enabledAt = now(); state.reminder.enabled = enabled; persist(); render(); syncPayDaysForm(); text('settings-feedback', `已保存，已有日期和已保存分摊表保持原口径。${converted ? `${converted} 笔旧账单从今天起切到考勤工作日，之前历史保留。` : ''}`); if (first) { showView('dashboard'); toast('考勤和工资记好了，开始上班吧。'); } } catch (error) { text('settings-feedback', error.message); } });
 $('load-demo').addEventListener('click', () => {
   const action = () => mutate(() => { state = demoState(); populateSettings(); });
   if (state.demo) { toast('当前已经是虚拟演示模式'); return; }
@@ -642,7 +671,7 @@ $('load-demo').addEventListener('click', () => {
   action(); showView('dashboard');
 });
 $('exit-demo').addEventListener('click', async () => {
-  try { await saveTail; const loaded = await api.loadReal(); state = loaded.state ?? emptyState(); migrateGoal(state, clockNow(state).getTime()); if (loaded.error) throw Error(loaded.error); settle(state, now()); persist(); populateSettings(); renderLists(); render(); if (!state.onboarded) showView('settings'); toast('已返回本地记录；演示数据另存'); } catch (error) { toast(error.message); }
+  try { await saveTail; const loaded = await api.loadReal(); state = loaded.state ?? emptyState(); migratePayDays(state, clockNow(state).getTime()); migrateGoal(state, clockNow(state).getTime()); if (loaded.error) throw Error(loaded.error); settle(state, now()); persist(); populateSettings(); renderLists(); render(); if (!state.onboarded) showView('settings'); toast('已返回本地记录；演示数据另存'); } catch (error) { toast(error.message); }
 });
 $('export-data').addEventListener('click', async () => { try { await saveTail; const result = await api.exportData(structuredClone(state)); if (!result.canceled) toast('备份已保存到选择的位置'); } catch (e) { toast(e.message); } });
 async function bootstrap() {
@@ -654,9 +683,10 @@ async function bootstrap() {
     state.onboarded ??= Object.keys(state.days).length > 0;
     state.reminder ??= { enabled: false, enabledAt: null, delivered: {} };
     if (loaded.error) toast(`${loaded.error}，原文件已保留，当前更改无法覆盖它。`);
-    const initial = JSON.stringify(state); settle(state, now());
+    const initial = JSON.stringify(state); const upgradedPayDays = migratePayDays(state, now()); settle(state, now());
     const upgradedGoal = migrateGoal(state, now());
     if (upgradedGoal) toast('目标已升级：保留名称和金额，从今天的净收入开始积累。');
+    else if (upgradedPayDays) toast('计薪天数已按当月考勤计算，已记录日期保持原口径。');
     if (JSON.stringify(state) !== initial) persist();
     if (loaded.storage) text('storage-note', loaded.storage);
     populateSettings(); renderLists(); render();
@@ -669,6 +699,7 @@ async function bootstrap() {
       maybeRemind().then(maybeGoalCompletion).then(maybeMonthlyReview);
       const nextKey = dateKey(new Date(now()));
       if (document.documentElement.dataset.day !== nextKey) { document.documentElement.dataset.day = nextKey; renderLists(); }
+      if (currentView === 'settings' && payDaysFormMonth !== monthKey(nextKey)) syncPayDaysForm();
       housekeeper = setTimeout(tick, isVisible() ? 1000 : 30000);
     }
     tickHousekeeper = tick;

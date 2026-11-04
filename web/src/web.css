@@ -1,0 +1,104 @@
+/* Browser controls stay readable from phones to wide desktop screens. */
+html{scrollbar-gutter:stable}
+body{min-width:320px}
+button,input,select{touch-action:manipulation}
+button{min-height:40px}
+input:not([type=checkbox]):not([type=radio]),label>select{font-size:16px}
+.sidebar-demo{display:block!important;min-height:40px}
+.data-actions{flex-wrap:wrap;gap:12px}
+.data-actions .muted{flex-basis:100%;line-height:1.7}
+.hero-value{max-width:100%}
+.hero-value strong{max-width:100%}
+.list-row>div{min-width:0;overflow-wrap:anywhere}
+.list-row .row-value{white-space:nowrap}
+.list-card p{line-height:1.9}
+.toast{bottom:max(24px,env(safe-area-inset-bottom));line-height:1.6}
+.hero .hero-value strong.very-long-value{font-size:24px}
+@media(max-width:760px){
+  .sidebar{display:flex;flex-wrap:wrap;gap:10px;padding:16px 18px 8px}
+  .brand{font-size:23px;margin-right:auto}
+  .brand>span:last-child{display:block}
+  .brand small{font-size:7px}
+  .sidebar-demo{font-size:11px!important}
+  nav{order:3;flex-basis:100%;width:100%;margin:4px 0 0;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
+  .nav-item{font-size:12px;padding:10px 5px;gap:5px;justify-content:center;white-space:nowrap;min-height:44px}
+  .nav-item svg{width:15px;height:15px}
+  main{padding:10px 18px 24px}
+  .page-header{align-items:flex-start}
+  .page-header h1{font-size:12px;line-height:1.6;max-width:230px}
+  .header-actions .quiet-button{font-size:11px;padding:8px;white-space:nowrap}
+  .overview-grid{grid-template-columns:1fr;gap:12px}
+  .hero{min-height:260px;padding:22px}
+  .hero .hero-value strong{font-size:50px}
+  .hero .hero-value strong.long-value{font-size:38px}
+  .hero .hero-value strong.very-long-value{font-size:23px}
+  .hero-value{margin-bottom:12px}
+  .hero-description{max-width:65%;font-size:11px;min-height:34px}
+  .hero-art{width:108px;height:100px;right:10px;bottom:20px;opacity:.82}
+  .hero.uncovered .hero-art{opacity:.82}
+  .hero-top{gap:6px}
+  .hero select{font-size:21px}
+  .shift-card{padding:22px}
+  .shift-card .card-heading{font-size:16px;padding-right:85px}
+  .clock-art{width:85px;height:85px;opacity:.8}
+  .shift-card .countdown{font-size:42px}
+  .shift-card .primary-button{padding:13px}
+  .dashboard-lower{display:flex;flex-direction:column;gap:12px}
+  .main-column,.side-column{display:contents}
+  .finance-card{display:block;padding:20px}
+  .finance-card .section-top{margin-bottom:19px}
+  .finance-card .money-grid{gap:8px;margin-bottom:18px}
+  .finance-card .money-grid strong{font-size:17px;overflow-wrap:anywhere}
+  .finance-card .money-grid small{font-size:10px}
+  .finance-card .net-row{display:flex;justify-content:space-between;padding:15px 0 0;border:0;border-top:1px solid #e2e6d6}
+  .finance-card .net-row strong{font-size:24px;margin:0}
+  .quick-card,.fixed-overview-card,.fish-card,.goal-card,.purchase-card{padding:20px}
+  .quick-card h2,.fixed-overview-card h2{font-size:16px}
+  .quick-card h2 strong,.fixed-overview-card h2 strong{font-size:19px}
+  .quick-expenses{grid-template-columns:repeat(6,minmax(0,1fr));gap:4px}
+  .quick-expenses button{font-size:11px;min-height:62px}
+  .quick-expenses span{width:35px;height:35px}
+  .section-top .text-button,.card-heading .text-button{font-size:11px;min-height:40px}
+  .fish-card .card-heading{font-size:13px}
+  .fish-art{width:100px;right:17px;top:54px}
+  .fish-time{font-size:32px}
+  .fish-subtitle{font-size:11px}
+  .efficiency>div{font-size:12px}
+  .efficiency b{font-size:13px}
+  .goal-card{display:block}
+  .goal-icon{display:none}
+  .goal-card .goal-numbers{font-size:12px}
+  .purchase-card{display:block}
+  .purchase-card h2{font-size:16px}
+  .purchase-card .input-currency{min-height:48px}
+  .purchase-card>strong{font-size:23px}
+  .purchase-card p,.purchase-card>small{font-size:11px}
+  .settings-card{padding:20px}
+  .form-grid{grid-template-columns:1fr;gap:0}
+  .weekdays{gap:5px;justify-content:space-between}
+  .weekdays span{width:32px;height:40px}
+  .attendance-settings{padding:12px}
+  .list-card{padding:20px}
+  .list-row{gap:8px;flex-wrap:wrap}
+  .list-row>div:last-child{gap:12px;margin-left:auto}
+  .notice{font-size:11px;gap:10px;align-items:flex-start}
+  footer{font-size:10px;flex-direction:column}
+  dialog,#monthly-dialog{max-width:calc(100vw - 24px);max-height:calc(100dvh - 24px);padding:20px}
+  .report-controls{flex-wrap:wrap;gap:8px}
+  .report-hours{grid-template-columns:1fr 1fr;gap:16px}
+  .report-money b{font-size:24px}
+  .calendar-weekdays,.calendar-grid{gap:4px}
+}
+@media(max-width:359px){
+  main{padding-left:12px;padding-right:12px}
+  .sidebar{padding-left:12px;padding-right:12px}
+  .nav-item{font-size:11px}
+  .hero .hero-value strong{font-size:44px}
+  .hero .hero-value strong.long-value{font-size:31px}
+  .hero .hero-value strong.very-long-value{font-size:21px}
+  .hero-art{width:100px;opacity:.65}
+  .hero-top .pill{font-size:9px;padding:5px 7px}
+  .hero select{font-size:19px}
+  .finance-card .money-grid strong{font-size:15px}
+  .weekdays span{width:28px}
+}

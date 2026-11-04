@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { emptyState, demoState, dateKey, at, validateSettings, validateState, startWork, stopWork, activeShift, clockOut, addBreak, deleteBreak, dueReminder, markReminderDelivered, attendanceStatus, monthlyReport, dueMonthlyReview, saveMonthlyReview, saveGoal, settleGoal, isWorkday, datesInMonth, expenseForDate, convertLegacyFixed, settle, dayStats, monthStats, goalStats, addFixed, fixedForDate, fixedItemForDate, clockNow, addExpense } from '../src/model.mjs';
 const key = '2026-11-03';
-const stateFor = () => { const s = emptyState(new Date(at(key, '08:00'))); s.settings.salary = 17600; s.settings.payDays = 22; return s; };
+const stateFor = () => { const s = emptyState(new Date(at(key, '08:00'))); s.settings.salary = 17600; s.settings.payDays = 22; delete s.settings.payDaysMode; delete s.settings.payDaysMonth; return s; };
 const close = (a, b) => assert.ok(Math.abs(a - b) < 1e-7, `${a} ≈ ${b}`);
 
 test('8-hour shift earns daily pay, excludes lunch, and caps at shift end', () => {
