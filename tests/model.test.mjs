@@ -186,7 +186,7 @@ test('monthly report sums actual shifts, working-day costs, manual breaks and fi
   startWork(s, at(key, '09:00')); addBreak(s, { date: key, minutes: 20, name: '喝点水' }, at(key, '12:00')); clockOut(s, at(key, '19:00'));
   s.expenses.push({ id: 'meal', date: key, name: '午餐', amount: 50, category: '午餐' });
   const report = monthlyReport(s, '2026-11', at(key, '20:00')); close(report.earned, 1600); close(report.costs, 250); close(report.net, 1350);
-  close(report.worked, 17 * 3600000); close(report.hourly, 96); close(report.overtime, 3600000); assert.equal(report.ontimeDays, 1); assert.equal(report.lateDays, 1); assert.equal(report.recorded, 2);
+  close(report.worked, 17 * 3600000); close(report.hourly, 81); close(report.overtime, 3600000); assert.equal(report.ontimeDays, 1); assert.equal(report.lateDays, 1); assert.equal(report.recorded, 2);
   saveMonthlyReview(s, report); saveMonthlyReview(s, report); assert.equal(Object.keys(s.monthlyReviews.snapshots).length, 1); close(s.monthlyReviews.snapshots['2026-11'].earned, 1600); validateState(s);
 });
 test('month-end report triggers at most once, survives reload, and labels open shifts as provisional', () => {

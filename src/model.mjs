@@ -4,6 +4,7 @@ export const dateKey = (date = new Date()) => `${date.getFullYear()}-${String(da
 export const localDate = key => new Date(`${key}T00:00:00`);
 export const at = (key, time) => new Date(`${key}T${time}:00`).getTime();
 export const monthKey = key => key.slice(0, 7);
+export const recordingStart = state => [state.trackingStart, ...Object.keys(state.days ?? {}), ...(state.expenses ?? []).filter(e=>e&&e.scope!=='month').map(e=>e.date)].filter(isDateKey).sort()[0];
 export const uid = () => globalThis.crypto.randomUUID();
 const sum = values => values.reduce((a, b) => a + b, 0);
 const overlap = (a, b) => Math.max(0, Math.min(a[1], b[1]) - Math.max(a[0], b[0]));
@@ -22,6 +23,7 @@ const validMonth = key => typeof key === 'string' && isDateKey(`${key}-01`);
 export function validateSettings(s) {
   if (!s || !finite(s.salary) || s.salary < 0 || s.salary > 1e9) throw Error('月薪请输入 0 到 10 亿之间的数字');
   validateCalendar(s);
+  if ((s.calendarDate !== undefined || s.calendarIsWorkday !== undefined) && (!isDateKey(s.calendarDate) || typeof s.calendarIsWorkday !== 'boolean')) throw Error('单日排班设置无效');
   if (s.payDaysMode !== undefined && !['auto', 'manual'].includes(s.payDaysMode)) throw Error('请选择自动计薪或手动调整本月');
   if (!finite(s.payDays) || s.payDays > 31 || (s.payDaysMode === 'auto' ? s.payDays < 0 : s.payDays <= 0)) throw Error('手动计薪天数必须大于 0 且不超过 31');
   if ((s.payDaysMode === 'manual' && !validMonth(s.payDaysMonth)) || (s.payDaysMonth !== undefined && !validMonth(s.payDaysMonth))) throw Error('计薪月份无效');
@@ -37,6 +39,7 @@ export function windows(key, s) {
 }
 export const scheduledMs = (key, s) => sum(windows(key, s).map(([a, b]) => b - a));
 export function isWorkday(key, s) {
+  if (s.calendarDate === key) return s.calendarIsWorkday;
   if (s.scheduleMode === 'everyday') return isDateKey(key);
   if (s.scheduleMode !== 'alternating') return s.weekdays.includes(localDate(key).getDay());
   const ordinal = value => { const [y, m, d] = value.split('-').map(Number); return Date.UTC(y, m - 1, d) / 86400000; };
@@ -48,7 +51,8 @@ export const expenseForDate = (expense, key) => expense.scope === 'month' ? expe
 export function plannedPayDays(key, settings) {
   if (!isDateKey(key)) throw Error('计薪日期无效');
   validateCalendar(settings);
-  return datesInMonth(key).filter(date => isWorkday(date, settings)).length;
+  const base = { ...settings }; delete base.calendarDate; delete base.calendarIsWorkday;
+  return datesInMonth(key).filter(date => isWorkday(date, base)).length;
 }
 export function payDaysModeForDate(key, settings) {
   if (settings.payDaysMode === undefined) return 'legacy';
@@ -76,7 +80,10 @@ export function salaryForDate(state, key) {
   return amount;
 }
 export function settingsForDay(state, key) {
-  return settingsForDate(key, { ...state.settings, salary: salaryForDate(state, key) });
+  const plan = state.dayPlans?.[key], base = plan?.settings ?? state.settings;
+  const copy = settingsForDate(key, { ...base, salary: salaryForDate(state, key) });
+  if (plan) { copy.calendarDate = key; copy.calendarIsWorkday = !isAbsent(plan); }
+  return copy;
 }
 export function saveSettings(state, input, salaryFrom = 'today', now = Date.now()) {
   if (!finite(now) || !['today', 'tomorrow'].includes(salaryFrom)) throw Error('请选择工资从今天或明天生效');
@@ -120,11 +127,17 @@ export function clockNow(state, wall = Date.now()) {
   return new Date(wall);
 }
 export function getDay(state, key, create = false) {
-  if (!state.days[key] && create) state.days[key] = { settings: settingsForDay(state, key), sessions: [], fish: [], breaks: [] };
+  if (!state.days[key] && create) {
+    state.days[key] = { settings: settingsForDay(state, key), sessions: [], fish: [], breaks: [] };
+    if (state.dayPlans?.[key]) state.days[key].calendar = structuredClone(state.dayPlans[key]);
+  }
   return state.days[key];
 }
+export const isAbsent = policy => ['leave', 'swap'].includes(policy?.kind);
+export const calendarPolicy = (state, key) => state.days[key]?.calendar ?? state.dayPlans?.[key];
+export const earningRate = (key, day) => day?.calendar && day.calendar.payMode !== 'standard' ? 0 : ratePerMs(key, day.settings);
 export function paidIntervals(day, key, now) {
-  if (!day || !isWorkday(key, day.settings)) return [];
+  if (!day || isAbsent(day.calendar) || !isWorkday(key, day.settings)) return [];
   const result = [];
   for (const session of day.sessions) {
     const interval = [session.start, Math.min(session.end ?? now, now)];
@@ -143,26 +156,34 @@ export function paidIntervals(day, key, now) {
   }, []);
 }
 export function dayStats(state, key, now = Date.now()) {
-  const day = getDay(state, key), s = day?.settings ?? settingsForDay(state, key);
+  const day = getDay(state, key), s = day?.settings ?? settingsForDay(state, key), policy = calendarPolicy(state, key), absent = isAbsent(policy);
+  const sessions = absent ? [] : day?.sessions ?? [];
   const paid = paidIntervals(day, key, now);
   const elapsed = sum(paid.map(([a, b]) => b - a));
-  const overtimeRanges = (day?.sessions ?? []).map(session => [Math.max(session.start, at(key, s.end)), Math.min(session.end ?? now, now)]).filter(([a, b]) => b > a).sort((a, b) => a[0] - b[0]);
+  const overtimeRanges = sessions.map(session => [Math.max(session.start, at(key, s.end)), Math.min(session.end ?? now, now)]).filter(([a, b]) => b > a).sort((a, b) => a[0] - b[0]);
   const mergedOvertime = overtimeRanges.reduce((out, next) => { const prev = out.at(-1); if (prev && next[0] <= prev[1]) prev[1] = Math.max(prev[1], next[1]); else out.push([...next]); return out; }, []);
-  const overtime = sum(mergedOvertime.map(([a, b]) => b - a)), worked = elapsed + overtime;
-  const fishRanges = (day?.fish ?? []).map(f => [f.start, Math.min(f.end ?? now, now)]).sort((a, b) => a[0] - b[0]);
+  let overtime = sum(mergedOvertime.map(([a, b]) => b - a)), worked = elapsed + overtime;
+  if (policy?.kind === 'overtime' && !absent) {
+    const ranges = sessions.map(v => [Math.max(v.start, at(key, s.start)), Math.min(v.end ?? now, now)]).filter(([a,b]) => b > a).sort((a,b) => a[0]-b[0]);
+    const merged = ranges.reduce((out, v) => { const prev=out.at(-1); if(prev && v[0]<=prev[1]) prev[1]=Math.max(prev[1],v[1]); else out.push([...v]); return out; }, []);
+    worked = sum(merged.map(v => v[1]-v[0]-(s.lunch ? overlap(v,[at(key,s.lunchStart),at(key,s.lunchEnd)]) : 0))); overtime = worked;
+  }
+  const fishRanges = (absent ? [] : day?.fish ?? []).map(f => [f.start, Math.min(f.end ?? now, now)]).sort((a, b) => a[0] - b[0]);
   const merged = fishRanges.reduce((a, f) => { const prev = a.at(-1); if (prev && f[0] <= prev[1]) prev[1] = Math.max(prev[1], f[1]); else a.push([...f]); return a; }, []);
   const legacyFish = Math.min(elapsed, sum(paid.flatMap(p => merged.map(f => overlap(p, f)))));
-  const fish = legacyFish + sum((day?.breaks ?? []).map(record => record.durationMs));
-  const overtimePay = sum((day?.overtimeDecisions ?? []).filter(entry => entry.clockOutAt <= now).map(entry => entry.amount));
-  const baseEarned = elapsed * ratePerMs(key, s), earned = baseEarned + overtimePay, actual = Math.max(0, worked - fish);
+  const fish = absent ? 0 : legacyFish + sum((day?.breaks ?? []).map(record => record.durationMs));
+  const overtimePay = policy?.includeOvertimePay === false ? 0 : sum((day?.overtimeDecisions ?? []).filter(entry => entry.clockOutAt <= now).map(entry => entry.amount));
+  const payDays = effectivePayDays(key, s), standardDay = payDays > 0 ? s.salary / payDays : 0;
+  const eligible = absent ? now >= at(key, s.end) : worked > 0;
+  const calendarPay = policy && eligible && (absent && policy.payMode === 'standard' || policy.payMode === 'custom') ? policy.payMode === 'custom' ? policy.amount : standardDay : 0;
+  const baseEarned = (absent || policy && policy.payMode !== 'standard' ? 0 : elapsed * ratePerMs(key, s)) + calendarPay, earned = baseEarned + overtimePay, actual = Math.max(0, worked - fish);
   const expenses = sum(state.expenses.map(e => expenseForDate(e, key)));
   const fixed = fixedForDate(state, key);
-  const payDays = effectivePayDays(key, s);
-  return { earned, baseEarned, overtimePay, elapsed, worked, overtime, actual, fish, legacyFish, expenses, fixed, net: earned - expenses - fixed, hourly: actual > 0 ? earned / actual * 3600000 : null, secondly: actual > 0 ? earned / actual * 1000 : null, planned: scheduledMs(key, s), daily: payDays > 0 ? s.salary / payDays : 0, payDays, settings: s };
+  return { calendarPay, policy, earned, baseEarned, overtimePay, elapsed, worked, overtime, actual, fish, legacyFish, expenses, fixed, net: earned - expenses - fixed, hourly: actual > 0 ? earned / actual * 3600000 : null, secondly: actual > 0 ? earned / actual * 1000 : null, planned: scheduledMs(key, s), daily: payDays > 0 ? s.salary / payDays : 0, payDays, settings: s };
 }
 export function activeSession(state, key, now) {
   const day = state.days[key];
-  return day?.sessions.find(s => s.end === null && s.start <= now);
+  return isAbsent(day?.calendar) ? undefined : day?.sessions.find(s => s.end === null && s.start <= now);
 }
 export function activeShift(state, now) {
   for (const key of Object.keys(state.days).sort().reverse()) {
@@ -182,11 +203,11 @@ export function startWork(state, now) {
   if (open) { if (open.key === key) return; throw Error('上一班次仍在进行，请先点击下班结算，再开始新班次'); }
   if (state.days[key]?.sessions.length) return resumeWork(state, key, now);
   const s = state.days[key]?.settings ?? settingsForDay(state, key);
-  if (!isWorkday(key, s) || effectivePayDays(key, s) <= 0) throw Error('今天不在设定的工作日中，可先调整排班');
+  if (!isWorkday(key, s) || effectivePayDays(key, s) <= 0 && !['custom', 'unpaid'].includes(state.dayPlans?.[key]?.payMode)) throw Error('今天不在设定的工作日中，可先调整排班');
   const planned = at(key, s.start);
   let start = Math.min(planned, now);
   // Backfill only a new current-day shift, never overwrite or double-count older work.
-  for (const day of Object.values(state.days)) for (const session of day.sessions) {
+  for (const day of Object.values(state.days).filter(d => !isAbsent(d.calendar))) for (const session of day.sessions) {
     if (session.end === null || session.end > now) throw Error('已有时段尚未结束，请先核对上班记录');
     if (session.end > start) start = session.end;
   }
@@ -201,6 +222,7 @@ export function stopWork(state, now) {
 }
 export function resumeWork(state, key, now) {
   const day = state.days[key];
+  if (isAbsent(day?.calendar)) throw Error('这一天已记为请假或调休，请先在日历恢复上班');
   if (!isDateKey(key) || !day?.sessions.length || !finite(now) || dateKey(new Date(now)) < key) throw Error('请选择已下班的班次再返工');
   const open = activeShift(state, now);
   if (open) { if (open.key === key) return; throw Error('另一班次还在进行，请先下班'); }
@@ -213,6 +235,7 @@ export function needsOvertimeDecision(state, now) {
 }
 export function clockOut(state, now, decision) {
   const key = activeShift(state, now)?.key ?? dateKey(new Date(now)), day = state.days[key];
+  if (isAbsent(day?.calendar)) throw Error('该日已记为请假或调休');
   if (!day?.sessions.length) throw Error('请先开始上班，再查看下班总结');
   const hasOpen = day.sessions.some(session => session.end === null);
   if (!hasOpen && day.summary?.sessionCount === day.sessions.length) return day.summary;
@@ -223,13 +246,14 @@ export function clockOut(state, now, decision) {
   if (needsDecision) (day.overtimeDecisions ??= []).push({ id: uid(), sessions: indexes, clockOutAt: now, kind: decision.kind, amount: decision.amount });
   const stats = dayStats(state, key, now), time = new Date(now);
   const deltaMinutes = Math.floor(now / 60000) - Math.floor(at(key, day.settings.end) / 60000);
-  day.summary = { clockOutAt: now, date: key, status: deltaMinutes < 0 ? 'early' : deltaMinutes > 0 ? 'late' : 'ontime', sessionCount: day.sessions.length, earned: stats.earned, overtimePay: stats.overtimePay, expenses: stats.expenses, fixed: stats.fixed, net: stats.net, fish: stats.fish, overtime: stats.overtime, actual: stats.actual, hourly: stats.hourly, scheduledEnd: day.settings.end };
+  day.summary = { clockOutAt: now, date: key, status: day.calendar?.kind === 'overtime' ? 'late' : deltaMinutes < 0 ? 'early' : deltaMinutes > 0 ? 'late' : 'ontime', sessionCount: day.sessions.length, earned: stats.earned, overtimePay: stats.overtimePay, expenses: stats.expenses, fixed: stats.fixed, net: stats.net, fish: stats.fish, overtime: stats.overtime, actual: stats.actual, hourly: stats.hourly, scheduledEnd: day.settings.end };
   return day.summary;
 }
 export function correctStartTime(state, record, now = Date.now()) {
   const key = record?.date, index = record?.sessionIndex, start = record?.start;
-  if (!finite(now) || !isDateKey(key) || key < state.trackingStart || key > dateKey(new Date(now))) throw Error('请选择已记录的上班日期');
+  if (!finite(now) || !isDateKey(key) || key < recordingStart(state) || key > dateKey(new Date(now))) throw Error('请选择已记录的上班日期');
   const day = state.days[key];
+  if (isAbsent(day?.calendar)) throw Error('这一天已记为请假或调休，请先在日历恢复上班');
   if (!day?.sessions.length) throw Error('这一天还没有上班记录，请先点击开始上班');
   if (!Number.isInteger(index) || index < 0 || index >= day.sessions.length) throw Error('请选择要修正的上班时段');
   if (!finite(start) || dateKey(new Date(start)) !== dateKey(new Date(day.sessions[index].start))) throw Error('上班时间须在这一段原记录的日期内，不能移到其他日期');
@@ -240,7 +264,7 @@ export function correctStartTime(state, record, now = Date.now()) {
   if (start === session.start) return { changed: false, before, after: before };
   // A correction edits one interval, never appends a paid interval or moves its date.
   const end = session.end ?? Infinity;
-  for (const [otherKey, otherDay] of Object.entries(state.days)) for (const [otherIndex, other] of otherDay.sessions.entries()) {
+  for (const [otherKey, otherDay] of Object.entries(state.days).filter(([, d]) => !isAbsent(d.calendar))) for (const [otherIndex, other] of otherDay.sessions.entries()) {
     if (otherKey === key && otherIndex === index) continue;
     const otherEnd = other.end ?? Infinity;
     if (end > start && otherEnd > other.start && start < otherEnd && other.start < end) throw Error('修正后会与另一段上班记录重叠，请保留各段真实的起止时间');
@@ -266,7 +290,7 @@ export function correctStartTime(state, record, now = Date.now()) {
 }
 export function addBreak(state, record, now = Date.now()) {
   const today = dateKey(new Date(now));
-  if (!record || !isDateKey(record.date) || record.date < state.trackingStart || record.date > today || !Number.isInteger(record.minutes) || record.minutes < 1 || record.minutes > 1440 || typeof record.name !== 'string' || !record.name.trim() || record.name.length > 40) throw Error('请填写 1 到 1440 之间的整数分钟、有效日期和事项名称');
+  if (!record || !isDateKey(record.date) || record.date < recordingStart(state) || record.date > today || !Number.isInteger(record.minutes) || record.minutes < 1 || record.minutes > 1440 || typeof record.name !== 'string' || !record.name.trim() || record.name.length > 40) throw Error('请填写 1 到 1440 之间的整数分钟、有效日期和事项名称');
   const day = state.days[record.date];
   if (!day?.sessions.length) throw Error('该日期尚未记录计薪工时，请先开始上班');
   const stats = dayStats(state, record.date, now), available = Math.max(0, stats.worked - stats.fish), durationMs = record.minutes * 60000;
@@ -288,7 +312,7 @@ export function deleteBreak(state, date, id) {
 export function dueReminder(state, now) {
   const reminder = state.reminder;
   if (!reminder?.enabled || !finite(reminder.enabledAt)) return null;
-  const key = activeShift(state, now)?.key ?? dateKey(new Date(now)), settings = state.days[key]?.settings ?? state.settings;
+  const key = activeShift(state, now)?.key ?? dateKey(new Date(now)), settings = state.days[key]?.settings ?? settingsForDay(state, key);
   const end = at(key, settings.end);
   if (!isWorkday(key, settings) || now < end || reminder.enabledAt > end || reminder.delivered[key]) return null;
   return { date: key, scheduledEnd: end };
@@ -299,8 +323,10 @@ export function markReminderDelivered(state, reminder, now) {
   return true;
 }
 export function attendanceStatus(state, key, now) {
-  const day = state.days[key];
+  const day = state.days[key], policy = calendarPolicy(state, key);
+  if (isAbsent(policy) && key <= dateKey(new Date(now))) return { status: policy.kind, label: policy.kind === 'leave' ? '请假' : '调休' };
   if (!day?.sessions.length) return null;
+  if (policy?.kind === 'overtime' && dayStats(state,key,now).worked > 0) return { status: 'late', label: activeSession(state,key,now) ? '加班中' : '加班' };
   if (activeSession(state, key, now)) return now >= at(key, day.settings.end) ? { status: 'late', label: '加班中' } : { status: 'working', label: '进行中' };
   const end = Math.max(...day.sessions.map(session => session.end ?? session.start));
   const delta = Math.floor(end / 60000) - Math.floor(at(key, day.settings.end) / 60000);
@@ -328,22 +354,24 @@ export function monthStats(state, key, now = Date.now()) {
   const dates = datesInMonth(key).filter(d => d <= today);
   const days = dates.map(d => dayStats(state, d, now));
   const total = field => sum(days.map(d => d[field]));
-  const actual = total('actual'), earned = total('earned');
+  const actual = total('actual'), earned = total('earned'), net = total('net');
   const workedDays = days.filter(day => day.worked > 0).length;
-  return { earned, actual, worked: total('worked'), overtime: total('overtime'), overtimePay: total('overtimePay'), fish: total('fish'), elapsed: total('elapsed'), hourly: actual > 0 ? earned / actual * 3600000 : null, secondly: actual > 0 ? earned / actual * 1000 : null, expenses: total('expenses'), fixed: total('fixed'), net: total('net'), averageDaily: workedDays > 0 ? total('net') / workedDays : null, workedDays, recorded: dates.filter(d => state.days[d]?.sessions.length).length, dates, days };
+  return { earned, actual, worked: total('worked'), overtime: total('overtime'), overtimePay: total('overtimePay'), fish: total('fish'), elapsed: total('elapsed'), hourly: actual > 0 ? net / actual * 3600000 : null, secondly: actual > 0 ? net / actual * 1000 : null, expenses: total('expenses'), fixed: total('fixed'), net, averageDaily: workedDays > 0 ? net / workedDays : null, workedDays, recorded: dates.filter(d => state.days[d]?.sessions.length && !isAbsent(calendarPolicy(state,d))).length, dates, days };
 }
 export function monthlyReport(state, month, now) {
   if (!/^\d{4}-\d{2}$/.test(month) || !isDateKey(`${month}-01`)) throw Error('月份无效');
   const stats = monthStats(state, `${month}-01`, now);
-  let ontimeDays = 0, lateDays = 0, earlyDays = 0, activeDays = 0;
+  let ontimeDays = 0, lateDays = 0, earlyDays = 0, activeDays = 0, leaveDays = 0, swapDays = 0;
   for (const key of stats.dates) {
     const status = attendanceStatus(state, key, now); if (!status) continue;
     if (activeSession(state, key, now)) activeDays++;
     else if (status.status === 'ontime') ontimeDays++;
     else if (status.status === 'late') lateDays++;
     else if (status.status === 'early') earlyDays++;
+    else if (status.status === 'leave') leaveDays++;
+    else if (status.status === 'swap') swapDays++;
   }
-  return { month, asOf: now, earned: stats.earned, overtimePay: stats.overtimePay, expenses: stats.expenses, fixed: stats.fixed, costs: stats.expenses + stats.fixed, net: stats.net, worked: stats.worked, actual: stats.actual, fish: stats.fish, overtime: stats.overtime, hourly: stats.hourly, recorded: stats.recorded, ontimeDays, lateDays, earlyDays, activeDays, provisional: activeDays > 0 || month >= dateKey(new Date(now)).slice(0, 7) };
+  return { month, asOf: now, earned: stats.earned, overtimePay: stats.overtimePay, expenses: stats.expenses, fixed: stats.fixed, costs: stats.expenses + stats.fixed, net: stats.net, worked: stats.worked, actual: stats.actual, fish: stats.fish, overtime: stats.overtime, hourly: stats.hourly, recorded: stats.recorded, leaveDays, swapDays, ontimeDays, lateDays, earlyDays, activeDays, provisional: activeDays > 0 || month >= dateKey(new Date(now)).slice(0, 7) };
 }
 export function dueMonthlyReview(state, now) {
   const key = dateKey(new Date(now)), month = key.slice(0, 7);
@@ -419,12 +447,12 @@ export function addExpense(state, expense, now = Date.now()) {
   const today = dateKey(new Date(now));
   if (expense.scope === 'month') {
     const month = expense.month;
-    if (expense.category !== '自定义' || !isDateKey(`${month}-01`) || month < state.trackingStart.slice(0, 7) || month > today.slice(0, 7)) throw Error('请选择开始记录月至今的月份');
+    if (expense.category !== '自定义' || !isDateKey(`${month}-01`) || month < recordingStart(state).slice(0, 7) || month > today.slice(0, 7)) throw Error('请选择开始记录月至今的月份');
     const allocationDates = datesInMonth(`${month}-01`).filter(key => isWorkday(key, state.settings));
     if (!allocationDates.length) throw Error('这个月考勤工作日为 0，无法分摊；请选当日花销或调整考勤');
     state.expenses.push({ ...expense, date: `${month}-01`, name: expense.name.trim(), id: uid(), allocationDates, settings: structuredClone(state.settings) }); return;
   }
-  if (expense.date > today || expense.date < state.trackingStart) throw Error('花销日期须在开始记录日至今天之间');
+  if (expense.date > today || expense.date < recordingStart(state)) throw Error('花销日期须在开始记录日至今天之间');
   state.expenses.push({ ...expense, scope: 'day', name: expense.name.trim(), id: uid() });
 }
 export function addFixed(state, item, key) {
@@ -443,7 +471,7 @@ export function convertLegacyFixed(state, key) {
   return legacy.length;
 }
 export function validateState(state) {
-  if (!state || state.version !== 1 || !isDateKey(state.trackingStart)) throw Error('本地记录版本或日期无效');
+  if (!state || ![1,2].includes(state.version) || !isDateKey(state.trackingStart)) throw Error('本地记录版本或日期无效');
   validateSettings(state.settings);
   if (state.payDaysMigration !== undefined) {
     const migration = state.payDaysMigration;
@@ -451,6 +479,11 @@ export function validateState(state) {
     validateSettings(migration.previousSettings);
   }
   if (state.salaryChanges !== undefined && (!Array.isArray(state.salaryChanges) || state.salaryChanges.length > 10000 || state.salaryChanges.some(c => !c || typeof c.id !== 'string' || !finite(c.changedAt) || !isDateKey(c.effectiveDate) || ![c.fromSalary, c.salary].every(v => finite(v) && v >= 0 && v <= 1e9)))) throw Error('工资调整记录无效');
+  if (state.version === 1 && (state.dayPlans !== undefined || state.calendarAudit !== undefined || Object.values(state.days ?? {}).some(d => d.calendar !== undefined))) throw Error('单日日历记录需要新版格式，请使用新版应用');
+  if (state.settings.calendarDate !== undefined) throw Error('基础考勤不能包含单日计划');
+  if (state.dayPlans !== undefined && (!state.dayPlans || Array.isArray(state.dayPlans) || typeof state.dayPlans !== 'object' || Object.keys(state.dayPlans).length > 20000)) throw Error('单日计划结构无效');
+  for (const [key, plan] of Object.entries(state.dayPlans ?? {})) { if (!isDateKey(key) || key < state.trackingStart && !state.days?.[key]?.calendar) throw Error('单日计划日期无效'); validateDayPolicy(plan); }
+  if (state.calendarAudit !== undefined && (!Array.isArray(state.calendarAudit) || state.calendarAudit.length > 2000 || state.calendarAudit.some(e => !e || typeof e.id !== 'string' || !isDateKey(e.date) || !finite(e.changedAt) || !['edit','undo'].includes(e.action) || (e.action === 'undo' && typeof e.undoOf !== 'string') || !e.before || !e.after || typeof e.before !== 'object' || typeof e.after !== 'object'))) throw Error('日历修改日志无效');
   if (!['today', 'month', 'goal', 'hidden'].includes(state.display)) throw Error('金额显示模式无效');
   if (state.goal !== null) {
     validateGoalInput(state.goal);
@@ -464,9 +497,11 @@ export function validateState(state) {
     } else if (!['day', 'month'].includes(state.goal.period)) throw Error('赚钱目标无效');
   }
   if (!state.days || typeof state.days !== 'object' || Object.keys(state.days).length > 20000 || !Array.isArray(state.expenses) || !Array.isArray(state.fixed) || state.expenses.length > 100000 || state.fixed.length > 10000) throw Error('本地记录结构无效');
+  const earliestRecord = recordingStart(state);
   for (const [key, day] of Object.entries(state.days)) {
-    if (!isDateKey(key) || key < state.trackingStart) throw Error('打卡日期无效');
+    if (!isDateKey(key) || key < state.trackingStart && (state.version !== 2 || !day.calendar || !state.calendarAudit?.some(e=>e.date===key))) throw Error('打卡日期无效');
     validateSettings(day.settings);
+    if (day.calendar !== undefined) validateDayPolicy(day.calendar);
     for (const list of [day.sessions, day.fish]) {
       if (!Array.isArray(list) || list.length > 10000 || list.some(i => !finite(i.start) || (i.end !== null && (!finite(i.end) || i.end < i.start)) || i.start < at(key, '00:00') || (i.start >= at(dateKey(new Date(localDate(key).getTime() + 36e5 * 36)), '00:00') && !(list === day.sessions && i.resumed === true)))) throw Error('计时记录无效');
     }
@@ -475,14 +510,14 @@ export function validateState(state) {
     if (day.startCorrections !== undefined && (!Array.isArray(day.startCorrections) || day.startCorrections.length > 10000 || day.startCorrections.some(r => !r || typeof r.id !== 'string' || !Number.isInteger(r.sessionIndex) || r.sessionIndex < 0 || r.sessionIndex >= day.sessions.length || !finite(r.from) || !finite(r.to) || dateKey(new Date(r.from)) < key || dateKey(new Date(r.from)) !== dateKey(new Date(r.to)) || !finite(r.correctedAt)))) throw Error('上班修正记录无效');
     if (day.overtimeDecisions !== undefined) {
       const decisions = day.overtimeDecisions, indexes = Array.isArray(decisions) ? decisions.flatMap(entry => entry?.sessions ?? []) : [];
-      if (!Array.isArray(decisions) || decisions.length > 10000 || decisions.some(entry => !entry || typeof entry.id !== 'string' || !finite(entry.clockOutAt) || !['free', 'paid'].includes(entry.kind) || !finite(entry.amount) || entry.amount < 0 || entry.amount > 1e9 || (entry.kind === 'free' ? entry.amount !== 0 : entry.amount <= 0) || !Array.isArray(entry.sessions) || !entry.sessions.length || entry.sessions.some(index => !Number.isInteger(index) || index < 0 || index >= day.sessions.length || day.sessions[index].end !== entry.clockOutAt)) || new Set(indexes).size !== indexes.length) throw Error('加班费记录无效');
+      if (!Array.isArray(decisions) || decisions.length > 10000 || decisions.some(entry => !entry || typeof entry.id !== 'string' || !finite(entry.clockOutAt) || !['free', 'paid'].includes(entry.kind) || !finite(entry.amount) || entry.amount < 0 || entry.amount > 1e9 || (entry.kind === 'free' ? entry.amount !== 0 : entry.amount <= 0) || !Array.isArray(entry.sessions) || !entry.sessions.length || entry.sessions.some(index => !Number.isInteger(index) || index < 0 || index >= day.sessions.length || day.sessions[index].end === null)) || decisions.some(entry => entry.clockOutAt !== Math.max(...entry.sessions.map(index => day.sessions[index]?.end))) || new Set(indexes).size !== indexes.length) throw Error('加班费记录无效');
     }
     if (day.summary?.recalculatedAt !== undefined && !finite(day.summary.recalculatedAt)) throw Error('总结重算时间无效');
     if (day.summary?.overtimePay !== undefined && (!finite(day.summary.overtimePay) || day.summary.overtimePay < 0)) throw Error('总结加班费无效');
     if (day.summary && (!finite(day.summary.clockOutAt) || day.summary.date !== key || !['early', 'ontime', 'late'].includes(day.summary.status) || !Number.isInteger(day.summary.sessionCount) || !['earned', 'expenses', 'fixed', 'net', 'fish', 'actual'].every(field => finite(day.summary[field])) || (day.summary.hourly !== null && !finite(day.summary.hourly)) || !validTime(day.summary.scheduledEnd))) throw Error('下班总结无效');
   }
   for (const e of state.expenses) {
-    if (!e || typeof e.id !== 'string' || !isDateKey(e.date) || (e.scope !== 'month' && e.date < state.trackingStart) || typeof e.name !== 'string' || !e.name.trim() || e.name.length > 40 || !finite(e.amount) || e.amount <= 0 || e.amount > 1e9) throw Error('花销记录无效');
+    if (!e || typeof e.id !== 'string' || !isDateKey(e.date) || (e.scope !== 'month' && e.date < earliestRecord) || typeof e.name !== 'string' || !e.name.trim() || e.name.length > 40 || !finite(e.amount) || e.amount <= 0 || e.amount > 1e9) throw Error('花销记录无效');
     if (e.scope === 'month') { if (!isDateKey(`${e.month}-01`) || !Array.isArray(e.allocationDates) || !e.allocationDates.length || new Set(e.allocationDates).size !== e.allocationDates.length || e.allocationDates.some(key => !isDateKey(key) || key.slice(0, 7) !== e.month)) throw Error('整月花销分摊记录无效'); validateSettings(e.settings); }
   }
   for (const f of state.fixed) {
@@ -501,4 +536,9 @@ export function validateState(state) {
     if (Object.values(reviews.snapshots).some(report => report.overtimePay !== undefined && (!finite(report.overtimePay) || report.overtimePay < 0))) throw Error('月报加班费无效');
   }
   return state;
+}
+
+function validateDayPolicy(p) {
+  if (!p || !['work','overtime','leave','swap'].includes(p.kind) || p.kind === 'overtime' && p.payMode !== 'unpaid' || !['standard','unpaid','custom'].includes(p.payMode) || typeof p.includeOvertimePay !== 'boolean' || (p.payMode === 'custom' && (!finite(p.amount) || p.amount <= 0 || p.amount > 1e9)) || !finite(p.updatedAt)) throw Error('请明确选择当天类型与薪资处理');
+  validateSettings(p.settings);
 }

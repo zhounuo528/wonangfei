@@ -40,12 +40,12 @@ exports.createStatusBar = async ({ app, getWindow, store, showFull }) => {
   function update() {
     const state = store.currentState; if (!state || tray.isDestroyed()) return;
     const stamp = model.clockNow(state).getTime(), shift = model.activeShift(state, stamp), key = shift?.key ?? model.dateKey(new Date(stamp)), stats = model.dayStats(state, key, stamp);
-    const overtime = !!shift && stamp >= model.at(key, stats.settings.end), progress = Math.min(1, stats.elapsed / stats.planned);
+    const overtime = !!shift && (stats.policy?.kind === 'overtime' || stamp >= model.at(key, stats.settings.end)), progress = Math.min(1, stats.elapsed / stats.planned);
     const title = state.display === 'hidden' ? '金额已隐藏' : `${stats.net < 0 ? '今日还欠' : '今日已赚'} ${money.formatCurrency(stats.net)}`;
     if (title !== lastTitle) { tray.setTitle(title, { fontType: 'monospacedDigit' }); lastTitle = title; }
-    const nextSignature = `${overtime}:${Math.round(progress * 100)}`;
+    const nextSignature = `${overtime}:${overtime ? 'open' : Math.round(progress * 100)}`;
     if (signature !== nextSignature) { tray.setImage(arcImage(overtime ? 1 : progress, overtime)); signature = nextSignature; }
-    currentTooltip = overtime ? '已加班：工资自动计薪已封顶，下班时可另记加班费。弧形 + 表示开放状态，没有百分比上限。点击查看详情。' : `计薪进度 ${(progress * 100).toFixed(0)}%。点击查看详情。`;
+    currentTooltip = overtime ? '已加班：基础工资不自动增长，下班时可另记加班费。弧形 + 表示开放状态，没有百分比上限。点击查看详情。' : `计薪进度 ${(progress * 100).toFixed(0)}%。点击查看详情。`;
     tray.setToolTip(currentTooltip);
   }
   update(); const timer = setInterval(update, 1000); timer.unref();

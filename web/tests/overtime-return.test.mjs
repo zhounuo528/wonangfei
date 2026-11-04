@@ -38,6 +38,6 @@ test('averages use income including fees over effective time excluding fish; mon
  s.expenses.push({id:'cost',name:'成本',date:key,amount:100});let d=dayStats(s,key,at(key,'18:00'));close(d.actual,6.5*hour);close(d.hourly,800/6.5);
  const later=dayStats(s,key,at(key,'19:00'));close(later.earned,800);assert.ok(later.hourly<d.hourly);
  clockOut(s,at(key,'20:01'),{kind:'paid',amount:100});startWork(s,at('2026-11-04','09:00'));clockOut(s,at('2026-11-04','09:00'));
- const m=monthStats(s,key,at('2026-11-04','12:00'));assert.equal(m.workedDays,1);assert.equal(m.averageDaily,800);close(m.hourly,m.earned/m.actual*hour);
+ const m=monthStats(s,key,at('2026-11-04','12:00'));assert.equal(m.workedDays,1);assert.equal(m.averageDaily,800);close(m.hourly,m.net/m.actual*hour);
  const empty=monthStats(fixture(),key,at(key,'09:00'));assert.equal(empty.averageDaily,null);assert.equal(empty.hourly,null);assert.equal(empty.secondly,null);
 });

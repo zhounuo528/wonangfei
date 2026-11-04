@@ -1,4 +1,8 @@
-import { dateKey, at, emptyState, clockNow, getDay, activeSession, activeShift, settle, startWork, resumeWork, needsOvertimeDecision, clockOut, correctStartTime, breakDate, addCurrentBreak, deleteBreak, dueReminder, markReminderDelivered, attendanceStatus, datesInMonth, dayStats, monthStats, monthlyReport, dueMonthlyReview, saveMonthlyReview, migrateGoal, saveGoal, goalStats, settleGoal, dueGoalNotice, markGoalNotified, fixedItemForDate, addExpense, addFixed, convertLegacyFixed, expenseForDate, validateSettings, validateState, windows, ratePerMs, isWorkday, paidIntervals } from './model.mjs';
+import { createTimeEditor } from './time-editor.mjs';
+import { calendarInfo } from './calendar.mjs';
+import { createCalendarEditor } from './calendar-ui.mjs';
+import { calendarPolicy, isAbsent, earningRate, recordingStart } from './model.mjs';
+import { dateKey, at, emptyState, clockNow, getDay, activeSession, activeShift, settle, startWork, resumeWork, needsOvertimeDecision, clockOut, breakDate, addCurrentBreak, deleteBreak, dueReminder, markReminderDelivered, attendanceStatus, datesInMonth, dayStats, monthStats, monthlyReport, dueMonthlyReview, saveMonthlyReview, migrateGoal, saveGoal, goalStats, settleGoal, dueGoalNotice, markGoalNotified, fixedItemForDate, addExpense, addFixed, convertLegacyFixed, expenseForDate, validateSettings, validateState, windows, ratePerMs, isWorkday, paidIntervals } from './model.mjs';
 import { createTimestampTicker } from './live.mjs';
 import { formatAmount, formatCurrency, belowCentPerSecond, roundedMoney } from './money.mjs';
 import { formatWorkEquivalent } from './work-equivalent.mjs';
@@ -15,8 +19,9 @@ let state, period = 'day', currentView = 'dashboard', mini = false, pinned = fal
 let saveTail = Promise.resolve(), saveRevision = 0, liveSnapshot, housekeeper, tickHousekeeper;
 let checkingReminder = false, reminderRetryAfter = 0;
 let calendarMonth, calendarDetailKey, calendarSignature;
+let calendarEditor, timeEditor;
 let checkingMonthlyReview = false, monthlyRetryAfter = 0, queuedReminder, queuedMonthlyReview;
-let correctionKey, correctionSaving = false, workActionBusy = false, pendingClockOut;
+let workActionBusy = false, pendingClockOut;
 let checkingGoal = false, goalRetryAfter = 0, queuedGoal;
 let payDaysFormMonth;
 const timeText = stamp => new Date(stamp).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false });
@@ -65,7 +70,8 @@ function paintLive(stamp) {
   text('sum-net', money(period === 'day' ? net : monthEarned - monthCosts));
   text('tray-gross', money(earned)); text('tray-net', money(net));
   const current = dayStats(state, key, stamp), workedDays = liveSnapshot.monthWorkedDaysBefore + (current.worked > 0 ? 1 : 0);
-  paintAverages(current, { earned: monthEarned, actual: liveSnapshot.monthActualBefore + current.actual, averageDaily: workedDays ? (monthEarned - monthCosts) / workedDays : null });
+  paintAverages(current, { earned: monthEarned, net: monthEarned - monthCosts, actual: liveSnapshot.monthActualBefore + current.actual, averageDaily: workedDays ? (monthEarned - monthCosts) / workedDays : null });
+  paintOvertimeMonth({ net: monthEarned - monthCosts, actual: liveSnapshot.monthActualBefore + current.actual, workedDays });
   paintGoal(pool, goalStatus);
   if (state.display === 'goal') text('hero-caption', goal.caption);
   if (state.display === 'today') updateNetTitle(net);
@@ -85,7 +91,7 @@ function syncLive() {
   if (!state) return;
   const stamp = now(), key = dateKey(new Date(stamp)), s = state.days[key]?.settings ?? state.settings;
   const visible = isVisible();
-  const active = visible && !reducedMotion.matches && (mini || currentView === 'dashboard') && state.display !== 'hidden' && !!activeSession(state, key, stamp) && ratePerMs(key, s) > 0 && windows(key, s).some(([a, b]) => stamp >= a && stamp < b);
+  const active = visible && !reducedMotion.matches && (mini || currentView === 'dashboard') && state.display !== 'hidden' && !!activeSession(state, key, stamp) && !isAbsent(calendarPolicy(state,key)) && (earningRate(key,{settings:s,calendar:calendarPolicy(state,key)}) > 0 && windows(key, s).some(([a, b]) => stamp >= a && stamp < b) || stamp >= at(key,s.end) || calendarPolicy(state,key)?.kind === 'overtime');
   document.documentElement.dataset.liveMode = !visible ? 'paused' : reducedMotion.matches ? 'reduced' : active ? 'smooth' : 'idle';
   liveTicker.setEnabled(active);
 }
@@ -284,22 +290,29 @@ function workContextKey(stamp) {
 }
 function paintAverages(day, month) {
   const stats = state.display === 'month' ? month : day, actual = stats.actual;
-  const seconds = actual > 0 ? stats.earned / actual * 1000 : null, hourly = actual > 0 ? stats.earned / actual * 3600000 : null;
+  const income = state.display === 'month' ? stats.net : stats.earned;
+  const seconds = actual > 0 ? income / actual * 1000 : null, hourly = actual > 0 ? income / actual * 3600000 : null;
   text('hero-avg-second', seconds === null ? '—' : money(seconds)); text('hero-avg-hour', hourly === null ? '—' : money(hourly));
   $('hero-avg-day-group').hidden = state.display !== 'month';
   text('hero-avg-day', month.averageDaily === null ? '—' : money(month.averageDaily));
-  text('hero-rate-note', state.display !== 'hidden' && belowCentPerSecond(seconds) ? '实际秒薪低于 ¥0.01' : '');
+  text('hero-rate-note', state.display === 'month' ? '本月净收入 ÷ 有效工时 / 实际工作日' : state.display !== 'hidden' && belowCentPerSecond(seconds) ? '实际秒薪低于 ¥0.01' : '');
+}
+function paintOvertimeMonth(month) {
+  text('overtime-month-day', month.workedDays > 0 ? money(month.net / month.workedDays) : '—');
+  text('overtime-month-hour', month.actual > 0 ? money(month.net / month.actual * 3600000) : '—');
+  text('overtime-month-second', month.actual > 0 ? money(month.net / month.actual * 1000) : '—');
 }
 function render() {
   const stamp = now(), time = new Date(stamp), todayKey = dateKey(time), shift = activeShift(state, stamp), key = workContextKey(stamp), day = getDay(state, key), d = dayStats(state, key, stamp), m = monthStats(state, todayKey, stamp), g = goalStats(state, stamp);
-  const running = !!shift, overtime = running && stamp >= at(key, d.settings.end), inPaid = windows(key, d.settings).some(([a, b]) => stamp >= a && stamp < b), isLunch = running && !inPaid && stamp >= at(key, d.settings.start) && !overtime;
-  const status = running ? (overtime ? '加班中 · 工资已封顶' : isLunch ? '午休中 · 暂停计薪' : stamp < at(key, d.settings.start) ? '等待上班时间' : '正在上班') : day?.summary ? '已下班 · 辛苦了' : stamp >= at(key, d.settings.end) ? '今日排班已结束' : '尚未开始';
+  const running = !!shift, overtime = running && (d.policy?.kind === 'overtime' || stamp >= at(key, d.settings.end)), inPaid = windows(key, d.settings).some(([a, b]) => stamp >= a && stamp < b), isLunch = running && !inPaid && stamp >= at(key, d.settings.start) && !overtime;
+  const absent = isAbsent(d.policy);
+  const status = absent ? `${d.policy.kind === 'leave' ? '请假' : '调休'} · 原时段保留归档` : running ? (overtime ? d.policy?.kind === 'overtime' ? '加班中 · 基础工资不增长' : '加班中 · 工资已封顶' : isLunch ? '午休中 · 暂停计薪' : stamp < at(key, d.settings.start) ? '等待上班时间' : '正在上班') : day?.summary ? '已下班 · 辛苦了' : stamp >= at(key, d.settings.end) ? '今日排班已结束' : '尚未开始';
   const finished = !running && !!day?.summary, finishedOvertime = finished && d.overtime > 0;
   const countdown = overtime || finishedOvertime ? d.overtime : finished ? 0 : isWorkday(key, d.settings) ? Math.max(0, at(key, d.settings.end) - stamp) : 0;
   const hidden = state.display === 'hidden';
   paintCharacter(d.net, hidden, overtime);
   const goalIncludesDay = !!state.goalPool && key >= state.goalPool.from;
-  liveSnapshot = { key, monthBeforeToday: m.earned - d.earned, rate: ratePerMs(key, d.settings), costs: d.expenses + d.fixed, monthCosts: m.expenses + m.fixed, goalBase: g.pool - (goalIncludesDay ? d.earned : 0), goalIncludesDay, goalStatus: g.status, overtimePay: d.overtimePay, overtime, monthActualBefore: m.actual - (key.slice(0,7) === todayKey.slice(0,7) ? d.actual : 0), monthWorkedDaysBefore: m.days.filter((day,index) => m.dates[index] !== key && day.worked > 0).length };
+  liveSnapshot = { key, monthBeforeToday: m.earned - d.earned, rate: earningRate(key,{settings:d.settings,calendar:d.policy}), costs: d.expenses + d.fixed, monthCosts: m.expenses + m.fixed, goalBase: g.pool - (goalIncludesDay ? d.earned : 0), goalIncludesDay, goalStatus: g.status, overtimePay: d.overtimePay + d.calendarPay, overtime, monthActualBefore: m.actual - (key.slice(0,7) === todayKey.slice(0,7) ? d.actual : 0), monthWorkedDaysBefore: m.days.filter((day,index) => m.dates[index] !== key && day.worked > 0).length };
   document.body.classList.toggle('amounts-hidden', hidden);
   document.body.classList.toggle('net-uncovered', !hidden && state.display === 'today' && d.net < 0);
   $('display-mode').value = state.display; $('mini-display').value = state.display;
@@ -309,15 +322,18 @@ function render() {
   document.querySelector('.hero').classList.toggle('uncovered', !hidden && state.display === 'today' && d.net < 0);
   text('hero-caption', hidden ? '安心专注，金额已隐藏。' : goalMode ? goalPresentation(g.pool, g.status).caption : state.display === 'month' ? `本月工资毛收入 · ${m.workedDays} 个有工时日；净赚见明细。` : '已扣除今日花销与固定负担。');
   text('work-status', status); paintAverages(d, m);
-  text('shift-label-text', overtime ? '已加班' : finishedOvertime ? '加班已结束' : finished ? '已下班' : '距离下班'); text('shift-end', isWorkday(key, d.settings) ? d.settings.end : '休息日'); text('countdown', duration(countdown));
-  text('shift-percent', `${Math.min(100, d.elapsed / d.planned * 100).toFixed(1)}%`); $('shift-progress').value = Math.min(100, d.elapsed / d.planned * 100);
+  text('shift-label-text', absent ? d.policy.kind === 'leave' ? '今日请假' : '今日调休' : overtime ? '已加班' : finishedOvertime ? '加班已结束' : finished ? '已下班' : '距离下班'); text('shift-end', isWorkday(key, d.settings) ? d.settings.end : '休息日'); text('countdown', duration(countdown));
+  text('shift-progress-label', overtime ? '加班按实际时长累计' : finishedOvertime ? '本班次已结束' : d.policy?.payMode && d.policy.payMode !== 'standard' ? '计划工时进度' : '计薪工时进度');
+  text('shift-percent', overtime ? '无预设上限' : finishedOvertime ? '已结算' : `${Math.min(100, d.elapsed / d.planned * 100).toFixed(1)}%`); $('shift-progress').value = Math.min(100, d.elapsed / d.planned * 100); $('shift-progress').hidden = overtime || finishedOvertime || absent;
   text('shift-summary', overtime ? '加班这么久，领导肯定很器重你吧。' : `上班 ${d.settings.start} · ${d.settings.lunch ? `午休 ${d.settings.lunchStart}–${d.settings.lunchEnd}` : '不扣午休'}`);
   const afterShift = !!day?.sessions.length && stamp >= at(key, d.settings.end);
   const workLabel = running ? '下班，看看今天  ✓' : day?.sessions.length ? '起来加班  →' : '开始上班  →';
-  text('work-toggle', workLabel); $('show-summary').hidden = !day?.summary;
+  text('work-toggle', absent ? '在日历调整这一天' : workLabel);
+  $('work-toggle').disabled = absent; $('mini-work').disabled = absent;
+  $('overtime-month-rates').hidden = !overtime; paintOvertimeMonth(m); $('show-summary').hidden = !day?.summary;
   const firstStart = day?.sessions.length ? Math.min(...day.sessions.map(session => session.start)) : null;
   text('recorded-start', firstStart === null ? '今日上班 · 尚未记录' : `${key === todayKey ? '今日上班' : `${key.slice(5).replace('-', '/')} 上班`} ${timeText(firstStart)}`);
-  $('correct-start').hidden = firstStart === null;
+  $('correct-start').hidden = firstStart === null || absent;
   const summary = period === 'day' ? d : m;
   text('sum-earned', money(summary.earned)); text('sum-expenses', money(summary.expenses)); text('sum-fixed', money(summary.fixed)); text('sum-net', money(summary.net));
   text('quick-total', money(d.expenses)); text('fixed-total', money(d.fixed));
@@ -325,7 +341,7 @@ function render() {
   text('ledger-note', period === 'day' ? '固定负担为当日分摊；净赚 = 工资 − 花销 − 固定负担。' : `本月已记录 ${m.recorded} 天工资。固定负担累计至今日，无打卡日也按规则分摊。`);
   for (const p of ['day', 'month']) { $(`period-${p}`).classList.toggle('active', period === p); $(`period-${p}`).setAttribute('aria-pressed', String(period === p)); }
   const breakStats = period === 'day' ? d : m;
-  text('fish-time', duration(breakStats.fish)); text('actual-time', duration(breakStats.actual)); text('fish-caption', `${period === 'day' ? '今日' : '本月'}已记录摸鱼 · 工资照常增长`);
+  text('fish-time', duration(breakStats.fish)); text('actual-time', duration(breakStats.actual)); text('fish-caption', `${period === 'day' ? '今日' : '本月'}已记录摸鱼 · 有效工时扣除这段休息`);
   text('effective-hour', breakStats.hourly === null ? '—' : money(breakStats.hourly)); text('effective-second', breakStats.secondly === null ? '—' : money(breakStats.secondly));
   text('effective-rate-note', !hidden && belowCentPerSecond(breakStats.secondly) ? '实际有效秒薪低于 ¥0.01/秒；显示为 ¥0.00，内部仍保留精度。' : '');
   paintGoal(g.pool, g.status);
@@ -334,7 +350,7 @@ function render() {
   // Price itself is a money value and is concealed in privacy mode too.
   $('purchase-amount').type = hidden ? 'password' : 'number';
   amountText('mini-amount', hidden ? '••••••' : goalMode ? goalPresentation(g.pool, g.status).value : `¥${number(state.display === 'month' ? m.earned : d.net)}`);
-  text('mini-time-label', overtime ? '已加班' : finishedOvertime ? '加班已结束' : finished ? '已下班' : '距下班'); text('mini-time-value', duration(countdown)); text('mini-time-status', status); $('mini-progress').value = d.elapsed / d.planned * 100;
+  text('mini-time-label', absent ? d.policy.kind === 'leave' ? '请假' : '调休' : overtime ? '已加班' : finishedOvertime ? '加班已结束' : finished ? '已下班' : '距下班'); text('mini-time-value', duration(countdown)); text('mini-time-status', status); $('mini-progress').value = d.elapsed / d.planned * 100; $('mini-progress').hidden = overtime || finishedOvertime || absent;
   document.body.classList.toggle('overtime-mode', overtime); document.body.classList.toggle('overtime-ended', finishedOvertime);
   text('mini-work', running ? '下班' : day?.sessions.length ? '起来加班' : '开始上班');
   text('tray-gross', money(d.earned)); text('tray-costs', money(d.fixed + d.expenses)); text('tray-net', money(d.net));
@@ -429,7 +445,8 @@ function openBreak() {
 function renderBreakList() {
   $('break-list').replaceChildren(); let count = 0;
   for (const key of Object.keys(state.days).sort().reverse()) {
-    const day = state.days[key], records = [...(day.breaks ?? [])].reverse();
+    const day = state.days[key]; if (isAbsent(day.calendar)) continue;
+    const records = [...(day.breaks ?? [])].reverse();
     const legacy = dayStats(state, key, now()).legacyFish;
     if (legacy > 0) records.push({ id: 'legacy', name: '历史计时记录', durationMs: legacy });
     for (const record of records) {
@@ -441,13 +458,15 @@ function renderBreakList() {
 }
 function showSummary(summary) {
   if (!summary) return;
-  text('summary-title', { early: '今天提前下班。', ontime: '准时下班，刚刚好。', late: '加班啦，今天辛苦了。' }[summary.status]);
+  const policy = calendarPolicy(state,summary.date);
+  if (isAbsent(policy)) summary = { ...summary, ...dayStats(state,summary.date,now()) };
+  text('summary-title', isAbsent(policy) ? policy.kind === 'leave' ? '这一天，已记为请假。' : '这一天，已记为调休。' : { early: '今天提前下班。', ontime: '准时下班，刚刚好。', late: '加班啦，今天辛苦了。' }[summary.status]);
   text('summary-date', `${summary.date} 班次 · ${new Date(summary.clockOutAt).toLocaleString('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false })} 下班`);
   text('summary-earned', money(summary.earned)); text('summary-fish', duration(summary.fish)); text('summary-actual', duration(summary.actual));
   text('summary-overtime', duration(summary.overtime ?? 0)); text('summary-overtime-pay', money(summary.overtimePay ?? 0));
   text('summary-hourly', summary.hourly === null ? '不可计算' : `${money(summary.hourly)} / 小时`);
   text('summary-costs', money(summary.expenses + summary.fixed)); text('summary-net', money(summary.net));
-  text('summary-note', `${summary.recalculatedAt ? '已按修正记录重算。' : ''}工资自动计到 ${summary.scheduledEnd}，加班费按下班记录另计；加班工时计入有效工时分母。`);
+  text('summary-note', `${isAbsent(policy) ? '请假 / 调休按当前结算，补薪在当日排班结束后计入；原时段保留。' : summary.recalculatedAt ? '已按修正记录重算。' : ''}工资自动计到 ${summary.scheduledEnd}，加班费按下班记录另计；加班工时计入有效工时分母。`);
   $('summary-dialog').showModal();
 }
 async function finishClockOut(stamp, decision) {
@@ -457,7 +476,7 @@ async function finishClockOut(stamp, decision) {
   finally { workActionBusy = false; }
 }
 async function workAction() {
-  if (workActionBusy || pendingClockOut || !requireSetup()) return;
+  if (workActionBusy || pendingClockOut || !requireSetup() || isAbsent(calendarPolicy(state,workContextKey(now())))) return;
   const stamp = now(), shift = activeShift(state, stamp), key = workContextKey(stamp), day = state.days[key];
   if (shift) {
     if (needsOvertimeDecision(state, stamp)) {
@@ -481,99 +500,33 @@ async function settlePendingOvertime(kind, amount) {
   pendingClockOut = null; $('overtime-fee-dialog').close(); await finishClockOut(pending.stamp, { kind, amount });
 }
 function latestSummary() { return Object.values(state.days).map(day => day.summary).filter(Boolean).sort((a, b) => b.clockOutAt - a.clockOutAt)[0]; }
-function correctionDraft() {
-  return { date: correctionKey, sessionIndex: Number($('correction-session').value), start: at(dateKey(new Date(state.days[correctionKey].sessions[Number($('correction-session').value)].start)), $('correction-time').value) };
-}
-function previewCorrection() {
-  text('correction-error', ''); $('correction-save').disabled = true; $('correction-preview').hidden = true;
-  try {
-    const preview = correctStartTime(structuredClone(state), correctionDraft(), now());
-    for (const [id, stats] of [['before', preview.before], ['after', preview.after]]) {
-      text(`correction-${id}-earned`, money(stats.earned)); text(`correction-${id}-worked`, duration(stats.worked));
-    }
-    const delta = preview.after.earned - preview.before.earned;
-    text('correction-delta', state.display === 'hidden' ? '工资变化已隐藏' : `工资${delta < 0 ? '减少' : '增加'} ${yuan(Math.abs(delta))}`);
-    $('correction-preview').hidden = false; $('correction-save').disabled = correctionSaving;
-  } catch (error) { text('correction-error', error.message); }
-}
-function selectCorrectionSession() {
-  const day = state.days[correctionKey], index = Number($('correction-session').value), session = day.sessions[index];
-  const planned = at(correctionKey, day.settings.start);
-  $('correction-time').value = timeText(index === 0 && session.start > planned ? planned : session.start);
-  text('correction-original', `${dateKey(new Date(session.start))} 原记录 ${timeText(session.start)} → ${session.end === null ? '还在上班' : new Date(session.end).toLocaleString('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false })}`);
-  previewCorrection();
-}
-function openStartCorrection(key) {
-  const day = state.days[key]; if (!day?.sessions.length) { toast('先有上班记录，才能修正时间。'); return; }
-  correctionKey = key; $('correction-session').replaceChildren();
-  for (const [index, session] of day.sessions.entries()) {
-    const option = document.createElement('option'); option.value = index;
-    option.textContent = `第 ${index + 1} 段 · ${timeText(session.start)} 起${session.end === null ? ' · 进行中' : ''}`; $('correction-session').append(option);
-  }
-  text('correction-date', `${key} 的上班记录`);
-  text('correction-schedule', `当天排班 ${day.settings.start}–${day.settings.end}${day.settings.lunch ? `，午休 ${day.settings.lunchStart}–${day.settings.lunchEnd}` : '，不扣午休'}。`);
-  const latest = day.startCorrections?.at(-1);
-  text('correction-history', latest ? `上次修正：第 ${latest.sessionIndex + 1} 段 ${timeText(latest.from)} → ${timeText(latest.to)}。原时间保留在本地修正记录中。` : '忘了打卡，努力也不能白算。');
-  selectCorrectionSession(); $('correction-dialog').showModal(); $('correction-time').focus();
-}
-async function submitStartCorrection(event) {
-  event.preventDefault(); if (correctionSaving) return;
-  let failureMessage;
-  correctionSaving = true; $('correction-save').disabled = true;
-  for (const id of ['correction-close', 'correction-cancel', 'correction-session', 'correction-time']) $(id).disabled = true;
-  try {
-    await saveTail.catch(() => {});
-    const next = structuredClone(state), result = correctStartTime(next, correctionDraft(), now());
-    settleGoal(next, now());
-    if (!result.changed) { $('correction-dialog').close(); toast('上班时间没有变化'); return; }
-    // The dialog is modal: commit the candidate only after its queued disk write succeeds.
-    const revision = ++saveRevision; text('save-status', '正在保存…');
-    let saveError;
-    saveTail = saveTail.catch(() => {}).then(async () => {
-        await api.save(next);
-      state = next; saveFailed = false; if (revision === saveRevision) text('save-status', '已保存在此浏览器'); return true;
-    }).catch(error => { saveFailed = true; text('save-status', `保存失败：${error.message}`); saveError = error; return false; });
-    if (!await saveTail) throw saveError;
-    calendarSignature = null; $('correction-dialog').close(); render(); renderLists();
-    toast('上班时间已修正，工资和工时重新算好了');
-  } catch (error) { failureMessage = `修正未保存完成：${error.message}。请保持窗口打开并重试。`; }
-  finally {
-    correctionSaving = false;
-    for (const id of ['correction-close', 'correction-cancel', 'correction-session', 'correction-time']) $(id).disabled = false;
-    if ($('correction-dialog').open) previewCorrection();
-    else $('correction-save').disabled = false;
-    if (failureMessage) text('correction-error', failureMessage);
-  }
-}
+function openStartCorrection(key) { timeEditor.open(key); }
 function renderCalendar() {
   calendarMonth ??= dateKey(new Date(now())).slice(0, 7);
   const [year, month] = calendarMonth.split('-').map(Number); text('calendar-month', `${year} 年 ${month} 月`);
-  const signature = `${calendarMonth}:${JSON.stringify(datesInMonth(`${calendarMonth}-01`).map(key => attendanceStatus(state, key, now())))}`;
-  if (signature === calendarSignature) return;
-  calendarSignature = signature;
-  $('calendar-grid').replaceChildren();
-  const dates = datesInMonth(`${calendarMonth}-01`), padding = (new Date(`${calendarMonth}-01T00:00:00`).getDay() + 6) % 7;
-  for (let i = 0; i < padding; i++) { const blank = document.createElement('span'); blank.className = 'calendar-blank'; $('calendar-grid').append(blank); }
-  for (const key of dates) {
-    const status = attendanceStatus(state, key, now()), button = document.createElement('button'), num = document.createElement('span'), label = document.createElement('small');
-    button.className = `calendar-day ${status?.status ?? 'empty'}`; button.dataset.calendarDate = key; num.textContent = String(Number(key.slice(-2))); label.textContent = status?.label ?? ''; button.append(num, label);
-    button.disabled = !status; button.setAttribute('aria-label', `${key} ${status?.label ?? '没有上班记录'}`);
-    if (status) button.addEventListener('click', () => { calendarDetailKey = key; renderCalendarDetail(key); $('calendar-detail-dialog').showModal(); });
-    $('calendar-grid').append(button);
+  const dates = datesInMonth(`${calendarMonth}-01`), today = dateKey(new Date(now()));
+  text('calendar-tracking-note', `原记录起点 ${state.trackingStart} · 空白历史补录须核对当日排班、工资和时段；固定负担不向前扩散。`);
+  const signature = JSON.stringify([calendarMonth,state.display,dates.map(key=>{const i=calendarInfo(state,key,now());return [i,dayStats(state,key,now()).net];})]);
+  if (signature === calendarSignature) return; calendarSignature=signature;
+  $('calendar-grid').replaceChildren();const padding=(new Date(`${calendarMonth}-01T00:00:00`).getDay()+6)%7;
+  for(let i=0;i<padding;i++){const blank=document.createElement('span');blank.className='calendar-blank';$('calendar-grid').append(blank);}
+  for(const key of dates){
+    const info=calendarInfo(state,key,now()),button=document.createElement('button'),num=document.createElement('span'),label=document.createElement('small');
+    button.className=`calendar-day ${info.status}${key===today?' today':''}`;button.dataset.calendarDate=key;num.textContent=String(Number(key.slice(-2)));label.textContent=info.future ? {work:'上班',rest:'休息',overtime:'加班',leave:'请假',swap:'调休'}[info.kind] : {ontime:'准时',early:'提前',late:'加班',working:'进行中',leave:'请假',swap:'调休'}[info.status] ?? (info.kind==='rest'?'休息':'未记录');button.append(num,label);button.disabled=!info.editable;
+    let aria=`${key} ${info.label}${info.editable?'':` 早于记录起点 ${state.trackingStart}，只读`}`;
+    if(info.profit!==null){const stats=dayStats(state,key,now()),value=document.createElement('b');value.className=`calendar-net ${state.display==='hidden'?'private':stats.net<0?'loss':stats.net===0?'zero':'gain'}`;value.textContent=money(stats.net).replace('¥','');value.title=`当日净利润 ${money(stats.net)}`;button.append(value);aria+=` 净利润 ${money(stats.net)}`;}
+    button.setAttribute('aria-label',aria);button.addEventListener('click',()=>{calendarDetailKey=key;if(info.future||!info.recorded){calendarEditor.open(key);return;}renderCalendarDetail(key);$('calendar-detail-dialog').showModal();});$('calendar-grid').append(button);
   }
 }
 function renderCalendarDetail(key) {
-  const day = state.days[key]; if (!day?.sessions.length) return;
-  const stats = dayStats(state, key, now()), status = attendanceStatus(state, key, now());
-  const start = Math.min(...day.sessions.map(session => session.start)), open = !!activeSession(state, key, now()), end = Math.max(...day.sessions.map(session => session.end ?? session.start));
-  const format = stamp => new Date(stamp).toLocaleString('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false });
-  text('calendar-detail-title', `${key} 的一天`); text('calendar-detail-status', status.label);
-  text('calendar-detail-start', format(start)); text('calendar-detail-end', open ? '尚未点击下班' : format(end));
-  for (const field of ['earned', 'expenses', 'fixed', 'net']) text(`calendar-detail-${field}`, money(stats[field]));
-  text('calendar-detail-overtime-pay', money(stats.overtimePay));
-  $('calendar-rework').hidden = !!activeShift(state, now()) || latestSummary()?.date !== key;
-  text('calendar-detail-fish', duration(stats.fish)); text('calendar-detail-overtime', duration(stats.overtime)); text('calendar-detail-hourly', stats.hourly === null ? '不可计算' : `${money(stats.hourly)} / 小时`);
-  text('calendar-detail-snapshot', day.summary ? `${day.summary.recalculatedAt ? '修正后重算的下班净额' : '下班时保存的净额快照'}：${money(day.summary.net)}。当天排班 ${day.settings.start}–${day.settings.end}。` : `该日没有保存下班总结快照。当天排班 ${day.settings.start}–${day.settings.end}。`);
+  const day=state.days[key],info=calendarInfo(state,key,now()),stats=dayStats(state,key,now());
+  const start=day?.sessions.length?Math.min(...day.sessions.map(v=>v.start)):null,end=day?.sessions.length?Math.max(...day.sessions.map(v=>v.end??v.start)):null;
+  const format=stamp=>stamp===null?'未记录':new Date(stamp).toLocaleString('zh-CN',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit',hour12:false});
+  text('calendar-detail-title',`${key} 的一天`);text('calendar-detail-status',info.label);text('calendar-detail-start',format(start));text('calendar-detail-end',activeSession(state,key,now())?'尚未点击下班':format(end));
+  for(const field of ['earned','expenses','fixed','net'])text(`calendar-detail-${field}`,money(stats[field]));
+  text('calendar-detail-overtime-pay',money(stats.overtimePay));text('calendar-detail-fish',duration(stats.fish));text('calendar-detail-overtime',duration(stats.overtime));text('calendar-detail-hourly',stats.hourly===null?'不可计算':`${money(stats.hourly)} / 小时`);
+  $('calendar-rework').hidden=isAbsent(info.policy)||!!activeShift(state,now())||latestSummary()?.date!==key;$('calendar-correct-start').hidden=isAbsent(info.policy)||!day?.sessions.length;
+  text('calendar-detail-snapshot',isAbsent(info.policy)?'原始时段与加班费记录保留，当前按请假 / 调休处理。':`该日排班 ${stats.settings.start}–${stats.settings.end}。修改上下班或单日类型前先预览影响。`);
 }
 function moveCalendar(delta) { const date = new Date(`${calendarMonth}-01T00:00:00`); date.setMonth(date.getMonth() + delta); if (date.getFullYear() < 1000 || date.getFullYear() > 9999) return; calendarMonth = dateKey(date).slice(0, 7); renderCalendar(); }
 function showMonthlyReport(report) {
@@ -586,6 +539,7 @@ function showMonthlyReport(report) {
   text('report-worked', hours(report.worked)); text('report-actual', hours(report.actual)); text('report-hourly', report.hourly === null ? '不可计算' : `${money(report.hourly)} / 小时`);
   text('report-ontime', `准时下班 ${report.ontimeDays} 天`); text('report-late', `加班下班 ${report.lateDays} 天`); text('report-early', `提前下班 ${report.earlyDays} 天`);
   text('report-overtime', `共加班 ${hours(report.overtime)}，摸鱼 ${hours(report.fish)}。`);
+  text('report-absence', `请假 ${report.leaveDays ?? 0} 天 · 调休 ${report.swapDays ?? 0} 天；不计实际工作工时。月均薪用净收入计算。`);
   text('report-active', report.activeDays ? `已记录 ${report.recorded} 天，另有 ${report.activeDays} 个班次尚未下班；进行中的班次未算入已下班天数。` : `已记录 ${report.recorded} 天。未记录的日期留白，不替你补满勤。`);
   if (!$('monthly-dialog').open) $('monthly-dialog').showModal();
 }
@@ -593,8 +547,8 @@ function openMonthlyReport(month) { try { if (month > dateKey(new Date(now())).s
 function openExpense(category) {
   if (!requireSetup()) return;
   $('expense-form').reset(); $('expense-category').value = category; $('expense-name').value = category === '自定义' ? '' : category;
-  $('expense-date').value = dateKey(new Date(now())); $('expense-date').max = dateKey(new Date(now())); $('expense-date').min = state.trackingStart;
-  $('expense-month').value = dateKey(new Date(now())).slice(0, 7); $('expense-month').max = dateKey(new Date(now())).slice(0, 7); $('expense-month').min = state.trackingStart.slice(0, 7); syncExpenseScope(); text('expense-error', ''); $('expense-dialog').showModal(); $('expense-amount').focus();
+  $('expense-date').value = dateKey(new Date(now())); $('expense-date').max = dateKey(new Date(now())); $('expense-date').min = recordingStart(state);
+  $('expense-month').value = dateKey(new Date(now())).slice(0, 7); $('expense-month').max = dateKey(new Date(now())).slice(0, 7); $('expense-month').min = recordingStart(state).slice(0, 7); syncExpenseScope(); text('expense-error', ''); $('expense-dialog').showModal(); $('expense-amount').focus();
 }
 function syncExpenseScope() {
   const custom = $('expense-category').value === '自定义'; $('expense-scope-label').hidden = !custom;
@@ -605,6 +559,13 @@ function syncExpenseScope() {
 }
 document.querySelectorAll('[data-view]').forEach(b => b.addEventListener('click', () => showView(b.dataset.view)));
 document.querySelectorAll('[data-expense]').forEach(b => b.addEventListener('click', () => openExpense(b.dataset.expense)));
+const calendarContext = { state:()=>state, now, money, duration, toast, ask, commit:async(next,baseline)=>{
+  await saveTail.catch(()=>{}); if(JSON.stringify(state)!==baseline)throw Error('记录已变化，请重新预览后保存');
+  const revision=++saveRevision;text('save-status','正在保存…');let failure;
+  saveTail=saveTail.catch(()=>{}).then(async()=>{if(!api)throw Error('本地保存不可用');await api.save(next);state=next;saveFailed=false;if(revision===saveRevision)text('save-status','已保存在此浏览器');return true;}).catch(error=>{failure=error;saveFailed=true;text('save-status',`保存失败：${error.message}`);return false;});
+  if(!await saveTail)throw failure;calendarSignature=null;render();renderLists();
+}};
+calendarEditor=createCalendarEditor(calendarContext);timeEditor=createTimeEditor(calendarContext);
 document.querySelectorAll('[data-close]').forEach(b => b.addEventListener('click', () => $(b.dataset.close).close()));
 $('confirm-cancel').addEventListener('click', () => { $('confirm-dialog').close(); confirmAction = null; });
 $('confirm-ok').addEventListener('click', () => { const fn = confirmAction; confirmAction = null; $('confirm-dialog').close(); fn?.(); });
@@ -618,12 +579,9 @@ for (const id of ['fish-toggle', 'mini-fish']) $(id).addEventListener('click', o
 $('view-breaks').addEventListener('click', () => { renderBreakList(); $('break-list-dialog').showModal(); });
 $('show-summary').addEventListener('click', () => showSummary(latestSummary()));
 $('correct-start').addEventListener('click', () => openStartCorrection(workContextKey(now())));
-$('calendar-correct-start').addEventListener('click', () => openStartCorrection(calendarDetailKey));
+$('calendar-correct-start').addEventListener('click', () => timeEditor.open(calendarDetailKey));
+$('calendar-edit-day').addEventListener('click', () => calendarEditor.open(calendarDetailKey));
 $('calendar-rework').addEventListener('click', () => { try { resumeWork(state, calendarDetailKey, now()); persist(); $('calendar-detail-dialog').close(); $('calendar-dialog').close(); render(); } catch (error) { toast(error.message); } });
-$('correction-session').addEventListener('change', selectCorrectionSession);
-$('correction-time').addEventListener('input', previewCorrection);
-$('correction-form').addEventListener('submit', submitStartCorrection);
-$('correction-dialog').addEventListener('cancel', event => { if (correctionSaving) event.preventDefault(); });
 $('open-calendar').addEventListener('click', () => { renderCalendar(); $('calendar-dialog').showModal(); });
 $('calendar-prev').addEventListener('click', () => moveCalendar(-1)); $('calendar-next').addEventListener('click', () => moveCalendar(1));
 $('calendar-report').addEventListener('click', () => openMonthlyReport(calendarMonth));
@@ -678,7 +636,7 @@ $('backup-file').addEventListener('change', async event => {
         imported.reminder ??= { enabled: false, enabledAt: null, delivered: {} };
         migratePayDays(imported, clockNow(imported).getTime()); migrateGoal(imported, clockNow(imported).getTime()); settle(imported, clockNow(imported).getTime()); settleGoal(imported, clockNow(imported).getTime());
         await api.save(imported);
-        state = imported; pendingClockOut = null; correctionKey = undefined; queuedGoal = null; queuedReminder = null; queuedMonthlyReview = null; saveFailed = false; text('save-status', '已保存在此浏览器');
+        state = imported; pendingClockOut = null; queuedGoal = null; queuedReminder = null; queuedMonthlyReview = null; saveFailed = false; text('save-status', '已保存在此浏览器');
         for (const dialog of document.querySelectorAll('dialog[open]')) dialog.close();
         calendarMonth = undefined; calendarSignature = undefined;
         populateSettings(); renderLists(); render(); showView(state.onboarded ? 'dashboard' : 'settings');

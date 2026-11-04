@@ -2,7 +2,7 @@ const {app,BrowserWindow,session}=require('electron'),path=require('node:path'),
 const root=path.resolve(__dirname,'..'),out=process.env.WORKDAY_EVIDENCE_DIR;
 if(!out||!process.env.WORKDAY_DATA_DIR)throw Error('Explicit isolated directories required');
 app.setPath('userData',path.join(process.env.WORKDAY_DATA_DIR,'chromium'));app.on('window-all-closed',()=>{});
-app.whenReady().then(async()=>{
+app.whenReady().then(async()=>{await fs.mkdir(out,{recursive:true});await fs.rm(path.join(out,'failure.txt'),{force:true});
  const isolated=session.fromPartition('salary-start-'+Date.now()),requests=[];
  isolated.webRequest.onBeforeRequest((d,c)=>{requests.push({method:d.method,url:d.url});c({});});
  const win=new BrowserWindow({width:1280,height:1000,show:true,webPreferences:{session:isolated,sandbox:true,contextIsolation:true,nodeIntegration:false}});

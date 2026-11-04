@@ -1,0 +1,167 @@
+{
+  "unit": [
+    {
+      "target": "desktop",
+      "timezone": "UTC",
+      "status": "passed",
+      "tests": 141
+    },
+    {
+      "target": "desktop",
+      "timezone": "Asia/Shanghai",
+      "status": "passed",
+      "tests": 141
+    },
+    {
+      "target": "desktop",
+      "timezone": "America/New_York",
+      "status": "passed",
+      "tests": 141
+    },
+    {
+      "target": "web",
+      "timezone": "UTC",
+      "status": "passed",
+      "tests": 143
+    },
+    {
+      "target": "web",
+      "timezone": "Asia/Shanghai",
+      "status": "passed",
+      "tests": 143
+    },
+    {
+      "target": "web",
+      "timezone": "America/New_York",
+      "status": "passed",
+      "tests": 143
+    }
+  ],
+  "migration": {
+    "oldUnchangedDataAcceptedByNew": true,
+    "calendarUpgradeVersion": 2,
+    "actualPreviousDesktopRejectsNewVersion": true,
+    "actualPreviousBrowserParserRejectsNewVersion": true,
+    "previousDesktopCannotOverwriteNewData": true,
+    "newVersionRoundtrips": true,
+    "data": "fictional temporary profile; old source at e60ae68",
+    "productionProfilesRead": false
+  },
+  "interface": [
+    {
+      "target": "desktop",
+      "status": "passed",
+      "checks": [
+        "past actual dates display positive/negative/zero net, blank history and future remain empty; planned work/rest visibly differ with text",
+        "future leave requires explicit pay choice; preview shows no current income/hours or target deposit, saves only a plan",
+        "future leave can change to time-off and undo through an impact confirmation without creating records",
+        "future rest day switches to overtime with zero base-pay rule, no preset multipliers or denominator changes",
+        "past down-clock correction previews and updates net in cell, goal and saved report without changing its cutoff",
+        "historical leave archives raw times, removes working hours and profit cell, permits negative goal pool; protected undo restores corrected work",
+        "blank history requires confirmed wage/time source; multiple backfilled segments keep their real gap and a single day profit",
+        "invalid end cannot commit or mutate the stored record",
+        "pre-first-use blank date can be explicitly backfilled after wage/time confirmation without moving original cost or goal boundary or inventing other days",
+        "start/end edits preserve a single original overtime fee; time-off custom pay is explicit and keeps raw records",
+        "paid historical leave upgrades format, keeps original clock-out and displays current settled leave pay with zero worked hours",
+        "homepage correction directly ends open false overtime, preserves fish and accurate summary; reopening next day does not restart overtime or create another day",
+        "all return-to-work times are immediately editable; closing more-than-two-hour overtime requires explicit extra fee choice, preserves original fee and cannot charge twice unchanged",
+        "editing one inline row leaves other rows including original seconds and milliseconds exactly unchanged",
+        "actual rest-day overtime keeps today wages and today averages zero while monthly net hourly/secondly rates visibly fall; monthly actual days include one extra day",
+        "fish reduces effective overtime denominator, then existing more-than-two-hour fee flow adds actual pay once before recomputing averages",
+        "past actual rest-day overtime shows its recorded net; long signed amounts wrap with full cents at 390px without overflow",
+        "hidden mode conceals profit text/title and profit-sign classes, including edit previews",
+        "real backup export and browser confirmed import retain date plans, original records and full audit snapshots",
+        "Mac native tray API recognizes unpaid rest-day overtime before normal end, hides money and uses open-ended plus without percent; no physical menu screenshot"
+      ],
+      "platform": "darwin",
+      "arch": "arm64",
+      "macOS": "27.2.0",
+      "data": "isolated fictional test profiles",
+      "versionTested": "0.3.3-dev"
+    },
+    {
+      "target": "web",
+      "status": "passed",
+      "checks": [
+        "past actual dates display positive/negative/zero net, blank history and future remain empty; planned work/rest visibly differ with text",
+        "future leave requires explicit pay choice; preview shows no current income/hours or target deposit, saves only a plan",
+        "future leave can change to time-off and undo through an impact confirmation without creating records",
+        "future rest day switches to overtime with zero base-pay rule, no preset multipliers or denominator changes",
+        "past down-clock correction previews and updates net in cell, goal and saved report without changing its cutoff",
+        "historical leave archives raw times, removes working hours and profit cell, permits negative goal pool; protected undo restores corrected work",
+        "blank history requires confirmed wage/time source; multiple backfilled segments keep their real gap and a single day profit",
+        "invalid end cannot commit or mutate the stored record",
+        "pre-first-use blank date can be explicitly backfilled after wage/time confirmation without moving original cost or goal boundary or inventing other days",
+        "start/end edits preserve a single original overtime fee; time-off custom pay is explicit and keeps raw records",
+        "paid historical leave upgrades format, keeps original clock-out and displays current settled leave pay with zero worked hours",
+        "homepage correction directly ends open false overtime, preserves fish and accurate summary; reopening next day does not restart overtime or create another day",
+        "all return-to-work times are immediately editable; closing more-than-two-hour overtime requires explicit extra fee choice, preserves original fee and cannot charge twice unchanged",
+        "editing one inline row leaves other rows including original seconds and milliseconds exactly unchanged",
+        "actual rest-day overtime keeps today wages and today averages zero while monthly net hourly/secondly rates visibly fall; monthly actual days include one extra day",
+        "fish reduces effective overtime denominator, then existing more-than-two-hour fee flow adds actual pay once before recomputing averages",
+        "past actual rest-day overtime shows its recorded net; long signed amounts wrap with full cents at 390px without overflow",
+        "hidden mode conceals profit text/title and profit-sign classes, including edit previews",
+        "real backup export and browser confirmed import retain date plans, original records and full audit snapshots"
+      ],
+      "platform": "darwin",
+      "arch": "arm64",
+      "macOS": "27.2.0",
+      "data": "isolated fictional test profiles",
+      "versionTested": "0.4.3-dev"
+    },
+    {
+      "target": "salary-regression-desktop",
+      "status": "passed",
+      "checks": [
+        "no demo entry, take-home salary wording, late first click backfills 09:00 through 15:00 minus lunch; net/cost/history correct",
+        "today salary immediately revalues hero, net, averages and goal ledger while preserving fish, costs and yesterday",
+        "actual correction dialog revalues a backfilled start after salary change, then can restore it without extra sessions or salary entries",
+        "tomorrow salary preserves today through reload, then new next-day shift uses it without duplicate credit",
+        "closed summary and saved monthly report revalue, paid overtime remains a single unchanged entry, saved cutoff and fish preserved",
+        "tomorrow before first work creates no fake record and later today starts at old salary",
+        "returning after clock-out starts at actual click and excludes the break between sessions",
+        "first start after planned end pays one capped workday and switches existing timer to unpaid overtime",
+        "lower pay keeps completed target and one settlement, lets residual pool become negative, no repeated completion popup",
+        "390-pixel mobile viewport fits take-home salary and effective-date controls, no horizontal overflow",
+        "after previous-day shift ends today, main start creates today record and excludes previously recorded overlap",
+        "early click and restart wait for scheduled start rather than crediting future hours",
+        "legacy active-demo mode selects personal record and preserves even an unreadable archive byte-for-byte",
+        "actual JSON export/reload preserves salary schedule and amended history; browser import roundtrip and archived-demo rejection leave personal/archive untouched",
+        "demo-only legacy installation opens empty personal onboarding with blank take-home salary, archive untouched"
+      ],
+      "platform": "darwin",
+      "arch": "arm64",
+      "macOS": "27.2.0",
+      "data": "isolated fictional test profiles",
+      "versionTested": "0.3.3-dev"
+    },
+    {
+      "target": "salary-regression-web",
+      "status": "passed",
+      "checks": [
+        "no demo entry, take-home salary wording, late first click backfills 09:00 through 15:00 minus lunch; net/cost/history correct",
+        "today salary immediately revalues hero, net, averages and goal ledger while preserving fish, costs and yesterday",
+        "actual correction dialog revalues a backfilled start after salary change, then can restore it without extra sessions or salary entries",
+        "tomorrow salary preserves today through reload, then new next-day shift uses it without duplicate credit",
+        "closed summary and saved monthly report revalue, paid overtime remains a single unchanged entry, saved cutoff and fish preserved",
+        "tomorrow before first work creates no fake record and later today starts at old salary",
+        "returning after clock-out starts at actual click and excludes the break between sessions",
+        "first start after planned end pays one capped workday and switches existing timer to unpaid overtime",
+        "lower pay keeps completed target and one settlement, lets residual pool become negative, no repeated completion popup",
+        "390-pixel mobile viewport fits take-home salary and effective-date controls, no horizontal overflow",
+        "after previous-day shift ends today, main start creates today record and excludes previously recorded overlap",
+        "early click and restart wait for scheduled start rather than crediting future hours",
+        "legacy active-demo mode selects personal record and preserves even an unreadable archive byte-for-byte",
+        "actual JSON export/reload preserves salary schedule and amended history; browser import roundtrip and archived-demo rejection leave personal/archive untouched",
+        "real IndexedDB concurrent-write rejection and synchronous mode-write quota failure preserve the personal transaction and archived profile",
+        "corrupt personal IndexedDB record is preserved and locked, never replaced by legacy demo or a new empty account",
+        "demo-only legacy installation opens empty personal onboarding with blank take-home salary, archive untouched"
+      ],
+      "platform": "darwin",
+      "arch": "arm64",
+      "macOS": "27.2.0",
+      "data": "isolated fictional test profiles",
+      "versionTested": "0.4.3-dev"
+    }
+  ]
+}

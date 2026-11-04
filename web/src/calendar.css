@@ -1,0 +1,28 @@
+.calendar-day{min-height:66px;border:1px solid transparent;position:relative;cursor:pointer;font-variant-numeric:tabular-nums}
+.calendar-day small{font-size:10px;line-height:1.4;white-space:normal}.calendar-day.plan-work{background:#e6f8f3;color:#19715b;border-color:#bfebdf}
+.calendar-day.plan-rest{background:#edf0f4;color:#687585;border-color:#dce2e9}.calendar-day.plan-overtime{background:#fff0f0;color:#ac424a;border:1px dashed #e3a4aa}
+.calendar-day.leave{background:#f0eafb;color:#7050a0;border-color:#dfd0f2}.calendar-day.swap{background:#e8f1fc;color:#496d9f;border-color:#ccddf4}
+.calendar-day.today::after{content:'';position:absolute;bottom:4px;left:35%;right:35%;height:3px;border-radius:4px;background:currentColor}.calendar-day:disabled{opacity:.35;cursor:default}
+.calendar-day:focus-visible{outline:3px solid #2ec9a0;outline-offset:2px}.calendar-plan-note{font-size:11px;line-height:1.7;color:#65727f}
+#calendar-edit-dialog{width:min(760px,calc(100vw - 28px));max-height:90vh;overflow:auto;padding:26px}#calendar-edit-form{display:grid;gap:14px}
+#calendar-edit-form fieldset{border:1px solid #dde7e4;border-radius:16px;padding:14px;margin:0;min-width:0}#calendar-edit-form legend{font-size:12px;color:#507064;padding:0 6px}
+#calendar-edit-form label{font-size:12px;min-width:0}#calendar-edit-form input,#calendar-edit-form select{max-width:100%;min-width:0;box-sizing:border-box}
+#calendar-edit-form input[readonly]{background:#f2f5f7;color:#64717d}#calendar-edit-form .form-grid{gap:12px}#calendar-edit-form .fine-print{margin:4px 0;font-size:11px;line-height:1.65}
+#calendar-edit-form .checkbox-label{display:flex;align-items:center;gap:8px;line-height:1.6}#calendar-edit-form .checkbox-label input{width:auto;min-width:16px}
+.calendar-impact{background:#eef9f5;border:1px solid #cce9de;border-radius:16px;padding:14px}.calendar-impact table{width:100%;border-collapse:collapse;font-size:12px;table-layout:fixed}
+.calendar-impact th,.calendar-impact td{padding:8px 5px;text-align:right;border-bottom:1px solid #d8e9e2;overflow-wrap:anywhere;font-variant-numeric:tabular-nums}.calendar-impact th:first-child{text-align:left;color:#62766d}
+.calendar-editor-actions{display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap}.calendar-editor-actions button{min-height:42px}
+.overtime-month-rates{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:12px 0;padding:12px;background:#fff2f2;border-radius:14px;font-size:11px;color:#805359}
+.overtime-month-rates span{display:grid;gap:5px}.overtime-month-rates b{color:#a64a52;font-size:14px;font-variant-numeric:tabular-nums}.overtime-month-rates small{grid-column:1/-1;line-height:1.5}
+.calendar-detail-actions{display:flex;gap:10px;flex-wrap:wrap;margin:12px 0}
+@media(max-width:520px){#calendar-edit-dialog{padding:18px 14px}#calendar-edit-form .form-grid{grid-template-columns:1fr}.calendar-day{min-height:58px;padding:5px 2px}.calendar-day small{font-size:9px}.calendar-impact table{font-size:11px}.overtime-month-rates{gap:6px}.overtime-month-rates b{font-size:12px}}
+.calendar-day .calendar-net{display:block;width:100%;font-size:10px;line-height:1.4;font-weight:650;overflow-wrap:anywhere;word-break:break-all;white-space:normal;font-variant-numeric:tabular-nums}
+.calendar-net.gain{color:#18795e}.calendar-net.loss{color:#b0434d}.calendar-net.zero,.calendar-net.private{color:#647281}
+@media(max-width:520px){.calendar-day:has(.calendar-net){min-height:82px}.calendar-day .calendar-net{font-size:9px}}
+#calendar-edit-form{gap:10px}#calendar-edit-form .dialog-heading{margin-bottom:0}#calendar-edit-form fieldset{padding:12px}#calendar-schedule-fields{border:1px solid #dce7e2;border-radius:12px;padding:10px 12px;font-size:12px;color:#526e64}#calendar-schedule-fields summary{cursor:pointer}#calendar-schedule-fields fieldset{margin-top:10px;border:0;padding:0}
+#correction-dialog{width:min(700px,calc(100vw - 28px));max-height:90vh;overflow:auto}#correction-form{display:grid;gap:12px}.time-edit-row{background:#f3f8f6;border:1px solid #dbe8e2;border-radius:14px;padding:12px;margin-bottom:10px}.time-edit-row>small{display:block;color:#667b70;font-size:11px;margin-bottom:8px}.time-edit-row input{max-width:100%;min-width:0;box-sizing:border-box}.time-edit-row .form-grid{gap:10px}.time-edit-row label{min-width:0;font-size:12px}#correction-times>.time-edit-row:only-child>small{display:none}#correction-form fieldset{border:1px solid #dce7e2;border-radius:14px;padding:12px}#correction-form .fine-print{font-size:11px;line-height:1.65;margin:4px 0}
+@media(max-width:520px){.time-edit-row .form-grid{grid-template-columns:1fr}}
+/* Profit fits common amounts on one line; large values retain every cent and wrap. */
+#calendar-dialog{width:min(640px,calc(100vw - 24px));max-width:calc(100vw - 24px);max-height:94vh;overflow:auto}
+.calendar-day .calendar-net{font-size:11px;letter-spacing:0}
+@media(max-width:520px){#calendar-dialog{padding:18px 12px}.calendar-weekdays,.calendar-grid{gap:4px}.calendar-day .calendar-net{font-size:8px}.calendar-legend{font-size:9px}}
