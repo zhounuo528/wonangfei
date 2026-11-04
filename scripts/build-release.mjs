@@ -29,7 +29,7 @@ try {
   const options = {
     dir: stage, name: platform === 'darwin' ? '窝囊费' : 'Wonangfei', executableName: 'Wonangfei',
     appBundleId: 'local.wonangfei.trial', helperBundleId: 'local.wonangfei.trial.helper',
-    appVersion: version, buildVersion: platform === 'darwin' ? '20261103.3' : `${version}.0`,
+    appVersion: version, buildVersion: platform === 'darwin' ? '20261104.3' : `${version}.0`,
     platform, arch, electronVersion, electronZipDir: zipDir,
     out: path.join(base, 'payload'), overwrite: false, asar: true, prune: false,
     icon: path.join(root, 'src/icons', platform === 'darwin' ? 'Wonangfei.icns' : 'Wonangfei.ico'),

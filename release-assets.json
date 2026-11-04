@@ -1,20 +1,21 @@
 {
-  "version": "0.3.0",
+  "version": "0.3.3",
   "assets": [
     {
-      "name": "Wonangfei-Setup-0.3.0-x64.exe",
-      "bytes": 116130259,
-      "sha256": "09cea3e32c20b5f58aada901b9c8fc84c95df018bd9609b8682cc15f3907a8d6"
+      "name": "Wonangfei-Setup-0.3.3-x64.exe",
+      "bytes": 117423437,
+      "sha256": "b71daf952331509a64e469ba0a22f84b1008d66b938bc441763f22a9a7e7af42"
     },
     {
-      "name": "Wonangfei-0.3.0-mac-x64.dmg",
-      "bytes": 144315794,
-      "sha256": "1a9b7d1adffc1bccc175c1dbaeacdc5986922bbecab0f6f1e392d1ae1ea5cf1b"
+      "name": "Wonangfei-0.3.3-mac-x64.dmg",
+      "bytes": 146583810,
+      "sha256": "554a43d69317363de3a3c3f8e84610982616b9c0ec5f070f4dfa582f78837c3a"
     },
     {
-      "name": "Wonangfei-0.3.0-mac-arm64.dmg",
-      "bytes": 135987277,
-      "sha256": "6b066bedcc548644c838055b0c3e9eaf4159af4ab778724ef59b8e733e6900ac"
+      "name": "Wonangfei-0.3.3-mac-arm64.dmg",
+      "bytes": 137853953,
+      "sha256": "14e9e017dbd4d8b52bc174ea24279dd74fa2bef0be9af4df457eb12195b12f0f"
     }
-  ]
+  ],
+  "asarSHA256": "973becb04a0e27883ea2737cdb96fa467add66483aa0b67022d0e74f88359c3e"
 }

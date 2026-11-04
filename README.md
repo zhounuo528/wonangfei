@@ -1,6 +1,6 @@
 # 窝囊费
 
-本地桌面计薪与上班成本记录工具。当前源码为桌面 0.3.3-dev 和网页版 0.4.3，使用薄荷毛玻璃界面，支持 996 与全年无休，数据保存在本机，无需账号或业务联网。
+本地桌面计薪与上班成本记录工具。当前源码为桌面 0.3.3 和网页版 0.4.3，使用薄荷毛玻璃界面，支持 996 与全年无休，数据保存在本机，无需账号或业务联网。
 
 ![实际运行的新版首页，全部为虚拟数据](docs/screenshots/home.png)
 
@@ -10,21 +10,21 @@
 
 工资统一输入到手金额，保存时可选今天或明天生效；今天重算当前日期的工资、净额及目标池，旧日期和额外加班费保留。首次上班默认按当天设定开始时间补算，扣午休，下班封顶；返工保留休息间隔，重叠已有工时不重复计入。演示模式已移除，旧演示档案原样保留、不混入个人账本。详见 [本轮规则与兼容](docs/SALARY-START.md)。
 
-独立网页版在 [web/](web/README.md)，浏览器使用 IndexedDB 和 JSON 备份，不依赖 Electron。进入 web 后执行 `npm test`、`npm run build`、`npm start` 即可本机体验。**线上仍待部署方部署**，本轮没有操作 Vercel 或 DNS；[部署与回退说明](web/DEPLOYMENT.md)。
+独立网页版在 [web/](web/README.md)，浏览器使用 IndexedDB 和 JSON 备份，不依赖 Electron。进入 web 后执行 `npm test`、`npm run build`、`npm start` 即可本机体验。网页生产部署另行执行，本轮没有操作 Vercel 或 DNS；[部署与回退说明](web/DEPLOYMENT.md)。
 
 ## 下载与系统
 
-[查看 v0.3.0 预发布安装包](https://github.com/zhounuo528/wonangfei/releases/tag/v0.3.0)。旧 v0.2.1 保留。已发布安装包仍为 0.3.0，尚不包含近期计薪、图标及本轮功能修复，可按架构选择：
+[下载 v0.3.3 预发布安装包](https://github.com/zhounuo528/wonangfei/releases/tag/v0.3.3)。旧 v0.3.0 与 v0.2.1 保留，不覆盖旧附件。
 
 | 文件 | 适用设备 | 最低系统 |
 | --- | --- | --- |
-| `Wonangfei-Setup-0.3.0-x64.exe` | Windows x64 | Windows 10 |
-| `Wonangfei-0.3.0-mac-x64.dmg` | Intel Core i5/i7/i9 Mac | macOS 13 |
-| `Wonangfei-0.3.0-mac-arm64.dmg` | Apple Silicon / M 系列 Mac | macOS 13 |
+| `Wonangfei-Setup-0.3.3-x64.exe` | Windows x64 | Windows 10 |
+| `Wonangfei-0.3.3-mac-x64.dmg` | Intel Core i5/i7/i9 Mac | macOS 13 |
+| `Wonangfei-0.3.3-mac-arm64.dmg` | Apple Silicon / M 系列 Mac | macOS 13 |
 
-Mac App 仅 ad-hoc 临时签名，未做 Developer ID 签名或 Apple 公证，DMG 未签名；Gatekeeper 评估拒绝，下载后可能被拦截。Windows App 和安装器未签名，可能提示未知发布者。没有要求关闭系统安全功能或移除隔离属性。
+Mac App 仅 ad-hoc 临时签名，未做 Developer ID 签名或 Apple 公证，DMG 未签名；Windows App 和安装器未签名。下载后可能被 Gatekeeper/SmartScreen 拦截，不要求关闭或绕过系统安全设置。
 
-Mac 打开 DMG 后将应用复制到 Applications；Windows 运行安装向导，只为当前用户安装。升级前先退出旧版并导出备份；沿用旧数据目录，但旧版不保证理解新增字段。详见 [安装与校验](docs/INSTALLATION-0.3.0.md)。
+Mac 打开 DMG 后将应用复制到 Applications；Windows 运行向导，只为当前用户安装。先退出旧版并导出升级前 JSON 备份；沿用原数据目录，回退旧版须配合升级前备份。详见 [安装、签名与回退](docs/INSTALLATION-0.3.3.md)。
 
 ## 功能
 
@@ -61,8 +61,10 @@ npm run smoke
 npm run smoke:calendar
 ```
 
-当前桌面源码 141 项单元测试、网页 143 项单元测试，分别在 UTC、上海、纽约通过；日历真实界面桌面 20 组、网页 19 组通过，工资与存储回归桌面 15 组、网页 17 组通过。只使用虚拟数据。`npm run smoke` 自动使用新临时虚拟档案，旧 GUI 脚本保留作历史证据。本轮没有新建安装包或生产部署。
+当前桌面源码 141 项单元测试、网页 143 项单元测试，分别在 UTC、上海、纽约通过；日历真实界面桌面 20 组、网页 19 组通过，工资与存储回归桌面 15 组、网页 17 组通过。只使用虚拟数据。`npm run smoke` 自动使用新临时虚拟档案，旧 GUI 脚本保留作历史证据。安装包当前为 0.3.3；两份最终 DMG 复制出的 arm64 原生应用和 x64 Rosetta 应用各通过 35 组打包检查。本轮没有生产网页部署。
 
 0.3.0 安装包的独立验证记录保留在 [旧版验收](docs/VALIDATION-0.3.0.md)，不能等同于当前源码打包验证。当前源码检查范围见 [日历验收汇总](docs/CALENDAR-VALIDATION.json)，旧版验收按原日期保留。Intel 硬件、macOS 15.x、Windows 安装运行、物理 Finder/Dock/菜单栏点击、Safari/Firefox 和实体手机仍未完成本轮验收。
 
-[构建方法](docs/BUILDING.md)和[迁移评估](docs/PORTABILITY.md)保留。当前 0.3.3-dev 是开发版本，发布构建脚本要求正式 x.y.z 版本并拒绝覆盖已有产物。
+[构建方法](docs/BUILDING.md)和[迁移评估](docs/PORTABILITY.md)保留。构建脚本只接受正式 x.y.z 版本并拒绝覆盖已有产物。
+
+Latest packaged validation: [v0.3.3 matrix](docs/VALIDATION-0.3.3.json). Native arm64 and x64-under-Rosetta are distinct from Intel hardware testing.

@@ -1,6 +1,6 @@
 # Calendar and time correction - web 0.4.3
 
-Desktop 0.3.3-dev; web 0.4.3. Based on e60ae68. Source update only; production deployment is a separate handoff. No new installers. All tests use isolated fictional data.
+Business rules for desktop 0.3.3 and web 0.4.3, based on e60ae68. Packaged installer validation is recorded separately in docs/VALIDATION-0.3.3.json. All tests use isolated fictional data.
 
 ## 实现
 
@@ -29,7 +29,7 @@ Desktop 0.3.3-dev; web 0.4.3. Based on e60ae68. Source update only; production d
 - 截图为本机 Electron/Chromium 实际渲染，虚拟数据，测试时钟仅由验收脚本注入，产品不含模拟时钟。
 
 
-实测 macOS 27.2 Apple Silicon + Electron 45.2.1。Mac 原生 Tray API 另核无薪休息日加班、隐藏标题和无上限进度，未完成物理系统菜单栏鼠标/系统截图验收。Windows、Intel 实机、macOS 15、Safari/Firefox、实体手机未测；390 px 是浏览器视口。未制作本轮安装包。
+实测 macOS 27.2 Apple Silicon + Electron 45.2.1。Mac 原生 Tray API 另核无薪休息日加班、隐藏标题和无上限进度，未完成物理系统菜单栏鼠标/系统截图验收。Windows、Intel 实机、macOS 15、Safari/Firefox、实体手机未测；390 px 是浏览器视口。Installer validation: docs/VALIDATION-0.3.3.json.
 
 ## 本地体验
 
