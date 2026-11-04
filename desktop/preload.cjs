@@ -3,6 +3,7 @@ contextBridge.exposeInMainWorld('workday', Object.freeze({
   about:()=>ipcRenderer.invoke('app:about'),
   checkUpdate:includePrerelease=>ipcRenderer.invoke('app:check-update',includePrerelease),
   openDownloadPage:()=>ipcRenderer.invoke('app:open-downloads'),
+  openContactAuthor:()=>ipcRenderer.invoke('app:contact-author'),
   openCheckedRelease:()=>ipcRenderer.invoke('app:open-checked-release'),
   load: () => ipcRenderer.invoke('state:load'),
   save: state => ipcRenderer.invoke('state:save', state),

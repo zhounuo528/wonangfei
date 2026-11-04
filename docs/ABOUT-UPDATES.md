@@ -2,7 +2,7 @@
 
 网页 0.4.5，桌面源码 0.3.5-dev。本轮不部署、不发布新安装包；当前公开桌面下载仍为 0.3.4。
 
-设置底部点击版本行可查看平台版本、内置更新日志、真实 GitHub Releases 页与手动检查。网页版本从 `web/package.json` 经构建生成模块和 `version.json`，并附内容 revision 与干净构建的源码提交；未提交构建显示开发状态，不伪装成某个已提交产物。桌面版本取 Electron `app.getVersion()`，打包时来自应用 package.json。没有读取旧 release-assets.json。
+各主页面共用信息栏点击版本行可查看平台版本、内置更新日志、真实 GitHub Releases 页与手动检查。网页版本从 `web/package.json` 经构建生成模块和 `version.json`，并附内容 revision 与干净构建的源码提交；未提交构建显示开发状态，不伪装成某个已提交产物。桌面版本取 Electron `app.getVersion()`，打包时来自应用 package.json。没有读取旧 release-assets.json。
 
 网页只在点击时 GET 同源 `version.json`，`credentials: omit`、`no-referrer`、`no-store`、禁用重定向，无查询参数／账本请求体。版本与构建 revision 相同显示已是当前版本；更高版或同版不同构建提供主动刷新；更低的服务端版本不诱导降级。刷新等待已发起的保存，阻止未保存设置、保存失败或仍有写入时刷新。刷新按钮不代替用户提交表单。
 
@@ -13,3 +13,5 @@
 任何更新都不会自动下载或安装。主进程跳转只接受固定 Releases 页，或最近成功检查得到并校验的本仓库发行页；不接收渲染器传入的任意 URL。网页下载链接为 GitHub 发行页，noopener／noreferrer。检查失败不会复用陈旧结果宣称已是最新。
 
 测试包括语义版本、草稿／预发布筛选、系统架构、旧版／当前版／开发超前、离线／限流／超时、无认证请求、同源刷新和未保存保护。真实桌面手动检查已返回公开 0.3.4；网页使用独立本机 HTTP 和 IndexedDB，生产站点未部署或验收。
+
+各主页面以及迷你窗增加软件下载和联系作者。作者邮箱为用户明确允许公开的 znzhounuo@outlook.com；href 固定为 mailto:znzhounuo@outlook.com，无查询参数或正文。桌面通过受信任 IPC 调用固定 mailto 的 shell.openExternal，不接受调用方地址；网页使用标准 mailto。点击才打开，不自动发送邮件。320／390px 使用正常文档流换行，迷你窗口默认高度增至 300px，以容纳入口。

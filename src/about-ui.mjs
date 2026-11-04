@@ -6,7 +6,8 @@ export function createAboutUI({api,flushSaves=async()=>{},reload=()=>location.re
   async function initialize(){
     try{
       info=await api.about();if(!['web','desktop'].includes(info?.stream)||!parseVersion(info.version)||!Array.isArray(info.changes))throw Error('版本信息不可用');
-      $('about-version-button').textContent=`关于窝囊费 · ${info.stream==='web'?'网页版':'桌面版'} v${info.version} ↗`;
+      $('about-version-button').textContent=`${info.stream==='web'?'网页版':'桌面版'} v${info.version} · 更新日志 ↗`;
+      $('mini-version-button').textContent=`v${info.version}`;
       $('about-current').textContent=`${info.stream==='web'?'网页版':'桌面版'} v${info.version}`;
       $('about-context').textContent=info.stream==='web'?`检查当前站点的网页版更新${info.development?' · 开发构建':''}`:`${{darwin:'macOS',win32:'Windows',linux:'Linux'}[info.platform]??info.platform} · ${info.arch}${info.packaged?'':' · 开发源码'}；安装要求见发行说明。`;
       $('about-preview-label').hidden=info.stream==='web';$('about-preview').checked=info.channel==='preview';
@@ -14,10 +15,11 @@ export function createAboutUI({api,flushSaves=async()=>{},reload=()=>location.re
       const list=$('about-changes');list.replaceChildren();
       for(const entry of info.changes){const section=document.createElement('section'),heading=document.createElement('h3'),ul=document.createElement('ul');heading.textContent=`v${entry.version}`;for(const message of entry.items){const li=document.createElement('li');li.textContent=message;ul.append(li);}section.append(heading,ul);list.append(section);}
       $('about-download').href=RELEASES_PAGE;$('about-check').disabled=false;
-    }catch{ $('about-version-button').textContent='关于窝囊费 · 版本信息不可用';$('about-status').textContent='无法读取构建版本，请重新打开应用或重新构建网页。';}
+    }catch{ $('about-version-button').textContent='版本信息不可用';$('mini-version-button').textContent='版本不可用';$('about-status').textContent='无法读取构建版本，请重新打开应用或重新构建网页。';}
   }
-  $('about-version-button').addEventListener('click',()=>{if(!$('about-dialog').open)$('about-dialog').showModal();});
-  $('about-download').addEventListener('click',event=>{if(info?.stream==='desktop'){event.preventDefault();api.openDownloadPage().catch(()=>toast('下载页暂时无法打开，请稍后重试。'));}});
+  document.querySelectorAll('[data-open-about]').forEach(button=>button.addEventListener('click',()=>{if(!$('about-dialog').open)$('about-dialog').showModal();}));
+  document.querySelectorAll('[data-app-download]').forEach(link=>link.addEventListener('click',event=>{if(typeof api?.openDownloadPage==='function'){event.preventDefault();api.openDownloadPage().catch(()=>toast('下载页暂时无法打开，请稍后重试。'));}}));
+  document.querySelectorAll('[data-contact-author]').forEach(link=>link.addEventListener('click',event=>{if(typeof api?.openContactAuthor==='function'){event.preventDefault();api.openContactAuthor().catch(()=>toast('邮件应用暂时无法打开，可复制邮箱联系。'));}}));
   $('about-preview').addEventListener('change',()=>{$('about-status').textContent='发行范围已调整，请手动重新检查。';$('about-open-release').hidden=true;});
   $('about-check').addEventListener('click',async()=>{
     if(!info||busy)return;busy=true;$('about-preview').disabled=true;$('about-check').disabled=true;$('about-check').textContent='正在检查…';$('about-refresh').hidden=true;$('about-open-release').hidden=true;$('about-status').textContent='正在获取公开版本信息…';

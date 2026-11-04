@@ -20,6 +20,7 @@ handle('state:save', async state => { await store.save(state); statusBar?.update
 handle('app:about',async()=>({stream:'desktop',version:app.getVersion(),platform:process.platform,arch:process.arch,packaged:app.isPackaged,channel:require('../package.json').releaseChannel??'preview',changes:(await import(pathToFileURL(path.join(root,'src/release-notes.mjs')).href)).releaseNotes('desktop')}));
 handle('app:check-update',includePrerelease=>updates.check(includePrerelease));
 handle('app:open-downloads',()=>shell.openExternal('https://github.com/zhounuo528/wonangfei/releases',{activate:true}));
+handle('app:contact-author',()=>shell.openExternal('mailto:znzhounuo@outlook.com',{activate:true}));
 handle('app:open-checked-release',()=>{const url=updates.checkedReleaseURL();if(!url)throw Error('请先成功检查适配发行版');return shell.openExternal(url,{activate:true});});
 handle('state:export', async state => {
   const { validateState, dateKey } = await import(pathToFileURL(path.join(root, 'src/model.mjs')).href);
@@ -31,7 +32,7 @@ handle('state:export', async state => {
 handle('window:pin', enabled => { if (typeof enabled !== 'boolean') throw Error('置顶参数无效'); win.setAlwaysOnTop(enabled); return win.isAlwaysOnTop(); });
 handle('window:mode', enabled => {
   if (typeof enabled !== 'boolean') throw Error('窗口参数无效');
-  if (enabled && !mini) { fullBounds = win.getBounds(); win.setMinimumSize(390, 270); win.setSize(430, 270); }
+  if (enabled && !mini) { fullBounds = win.getBounds(); win.setMinimumSize(390, 300); win.setSize(430, 300); }
   else if (!enabled) { win.setMinimumSize(760, 650); if (fullBounds) win.setBounds(fullBounds); else win.setSize(1220, 930); win.setTitle('窝囊费'); win.webContents.send('window:presentation', 'full'); }
   mini = enabled; return { mini };
 });
