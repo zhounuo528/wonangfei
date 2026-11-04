@@ -25,7 +25,7 @@ const stage = await fs.mkdtemp(path.join(root, '.release-build-input-'));
 try {
   // Only product code and assets enter the application. No profiles, tests or build tools.
   for (const directory of ['desktop', 'src']) await fs.cp(path.join(root, directory), path.join(stage, directory), { recursive: true, dereference: false });
-  await fs.writeFile(path.join(stage, 'package.json'), JSON.stringify({ name: 'wonangfei', version, main: 'desktop/main.cjs', description: pkg.description, author: 'Wonangfei' }, null, 2));
+  await fs.writeFile(path.join(stage, 'package.json'), JSON.stringify({ name: 'wonangfei', version, releaseChannel:pkg.releaseChannel, main: 'desktop/main.cjs', description: pkg.description, author: 'Wonangfei' }, null, 2));
   const options = {
     dir: stage, name: platform === 'darwin' ? '窝囊费' : 'Wonangfei', executableName: 'Wonangfei',
     appBundleId: 'local.wonangfei.trial', helperBundleId: 'local.wonangfei.trial.helper',

@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, session, dialog, Menu } = require('electron');
+const { app, BrowserWindow, ipcMain, session, dialog, Menu, shell } = require('electron');
 const path = require('node:path');
 const fs = require('node:fs/promises');
 const { pathToFileURL } = require('node:url');
@@ -10,12 +10,17 @@ app.setName('窝囊费');
 app.setPath('userData', storagePath);
 app.setPath('sessionData', path.join(storagePath, 'chromium'));
 const store = new LocalStore(storagePath);
+const updates=require('./update-service.cjs').createUpdateService({version:app.getVersion(),platform:process.platform,arch:process.arch});
 let win, fullBounds, mini = false, statusBar;
 const indexUrl = pathToFileURL(path.join(root, 'src/index.html')).href;
 function trusted(event) { if (!win || event.sender !== win.webContents || event.senderFrame !== win.webContents.mainFrame || event.senderFrame.url !== indexUrl) throw Error('未知调用来源'); }
 function handle(name, fn) { ipcMain.handle(name, async (event, ...args) => { trusted(event); return fn(...args); }); }
 handle('state:load', async () => ({ ...await store.load(), nativeVisible: win.isVisible() && !win.isMinimized(), platform: process.platform }));
 handle('state:save', async state => { await store.save(state); statusBar?.update(); });
+handle('app:about',async()=>({stream:'desktop',version:app.getVersion(),platform:process.platform,arch:process.arch,packaged:app.isPackaged,channel:require('../package.json').releaseChannel??'preview',changes:(await import(pathToFileURL(path.join(root,'src/release-notes.mjs')).href)).releaseNotes('desktop')}));
+handle('app:check-update',includePrerelease=>updates.check(includePrerelease));
+handle('app:open-downloads',()=>shell.openExternal('https://github.com/zhounuo528/wonangfei/releases',{activate:true}));
+handle('app:open-checked-release',()=>{const url=updates.checkedReleaseURL();if(!url)throw Error('请先成功检查适配发行版');return shell.openExternal(url,{activate:true});});
 handle('state:export', async state => {
   const { validateState, dateKey } = await import(pathToFileURL(path.join(root, 'src/model.mjs')).href);
   validateState(state);

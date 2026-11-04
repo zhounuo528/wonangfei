@@ -129,8 +129,8 @@ export function repriceAutomaticMonth(state,key,now=Date.now()){
     const after=dayStats(state,date,now);changes.push({date,fromDays:beforeDays,days:nextDays,earnedBefore:before.earned,earnedAfter:after.earned,netBefore:before.net,netAfter:after.net});
     if(day.summary){const stats=dayStats(state,date,day.summary.clockOutAt);for(const field of ['earned','overtimePay','fish','overtime','actual','hourly'])day.summary[field]=stats[field];day.summary.net=stats.earned-day.summary.expenses-day.summary.fixed;day.summary.recalculatedAt=now;}
   }
-  if(changes.length){state.version=3;state.payrollOverlayVersion=1;const saved=state.monthlyReviews?.snapshots?.[month];if(saved)state.monthlyReviews.snapshots[month]={...monthlyReport(state,month,saved.asOf),recalculatedAt:now};}
-  if(payDaysModeForDate(key,state.settings)==='auto'&&payrollDaysForMonth(state,key)!==plannedPayDays(key,state.settings)){state.version=3;state.payrollOverlayVersion=1;}
+  if(changes.length){state.version=Math.max(state.version,3);state.payrollOverlayVersion=1;const saved=state.monthlyReviews?.snapshots?.[month];if(saved)state.monthlyReviews.snapshots[month]={...monthlyReport(state,month,saved.asOf),recalculatedAt:now};}
+  if(payDaysModeForDate(key,state.settings)==='auto'&&payrollDaysForMonth(state,key)!==plannedPayDays(key,state.settings)){state.version=Math.max(state.version,3);state.payrollOverlayVersion=1;}
   return changes;
 }
 function revalueSalaryDays(next,from,now,changeId) {
@@ -162,7 +162,7 @@ export function saveSettings(state, input, salaryFrom = 'today', now = Date.now(
   next.settings = structuredClone(input);
   let impact={affectedDates:[],protectedDates:[]},changeId;
   if (initialized) {
-    next.salaryBaseline = { salary: input.salary, effectiveDate:`${monthKey(key)}-01`, createdAt: now, source: 'initial-setup' };next.version=3;
+    next.salaryBaseline = { salary: input.salary, effectiveDate:`${monthKey(key)}-01`, createdAt: now, source: 'initial-setup' };next.version=Math.max(next.version,3);
   } else if (changed) {
     const legacy=initialSalaryReference(state);
     if(legacy?.source==='legacy-reference'){
@@ -170,7 +170,7 @@ export function saveSettings(state, input, salaryFrom = 'today', now = Date.now(
       next.salaryBaseline={salary:options.legacyChoice==='initial'?legacy.salary:0,effectiveDate:`${monthKey(state.trackingStart)}-01`,createdAt:now,source:options.legacyChoice==='initial'?'legacy-confirmed':'legacy-real-change',legacyChangeId:state.salaryChanges[0].id};
     }
     const previousAtDate=next.salaryBaseline?salaryForDate(next,effectiveDate):salaryForDate(state,effectiveDate);
-    changeId=uid();(next.salaryChanges??=[]).push({id:changeId,changedAt:now,effectiveDate,fromSalary:previousAtDate,salary:input.salary,source:'dated-adjustment'});next.version=3;next.salaryTimelineVersion=1;
+    changeId=uid();(next.salaryChanges??=[]).push({id:changeId,changedAt:now,effectiveDate,fromSalary:previousAtDate,salary:input.salary,source:'dated-adjustment'});next.version=Math.max(next.version,3);next.salaryTimelineVersion=1;
     impact=revalueSalaryDays(next,effectiveDate,now,changeId);
   }
   next.settings.salary=salaryForDate(next,key);
@@ -182,7 +182,7 @@ export function saveSettings(state, input, salaryFrom = 'today', now = Date.now(
 export function undoSalaryChange(state,changeId,now=Date.now()){
   const change=state.salaryChanges?.find(c=>c.id===changeId&&c.source==='dated-adjustment');
   if(!finite(now)||!change||state.salaryCancellations?.some(c=>c.changeId===changeId))throw Error('这笔工资调整不可撤销或已经撤销');
-  const next=structuredClone(state);(next.salaryCancellations??=[]).push({id:uid(),changeId,changedAt:now});next.version=3;next.salaryTimelineVersion=1;const impact=revalueSalaryDays(next,change.effectiveDate,now,changeId);validateState(next);Object.assign(state,next);return {...impact,effectiveDate:change.effectiveDate};
+  const next=structuredClone(state);(next.salaryCancellations??=[]).push({id:uid(),changeId,changedAt:now});next.version=Math.max(next.version,3);next.salaryTimelineVersion=1;const impact=revalueSalaryDays(next,change.effectiveDate,now,changeId);validateState(next);Object.assign(state,next);return {...impact,effectiveDate:change.effectiveDate};
 }
 export const ratePerMs = (key, s) => { const days = effectivePayDays(key, s), duration = scheduledMs(key, s); return days > 0 && duration > 0 ? s.salary / days / duration : 0; };
 export function emptyState(now = new Date()) {
@@ -208,7 +208,7 @@ export function migrateOvertimeExclusions(state,now=Date.now()){
     if(policy.includeOvertimePay!==false||policy.excludedOvertimePayIds!==undefined)continue;
     policy.excludedOvertimePayIds=(state.days[key]?.overtimeDecisions??[]).filter(f=>f.clockOutAt<=policy.updatedAt).map(f=>f.id);dates.add(key);
   }
-  if(!dates.size)return false;state.version=3;state.overtimePolicyMigration={changedAt:now,dates:[...dates].sort()};return true;
+  if(!dates.size)return false;state.version=Math.max(state.version,3);state.overtimePolicyMigration={changedAt:now,dates:[...dates].sort()};return true;
 }
 export const earningRate = (key, day) => day?.calendar && day.calendar.payMode !== 'standard' ? 0 : ratePerMs(key, day.settings);
 export function paidIntervals(day, key, now) {
@@ -421,6 +421,7 @@ export function fixedItemForDate(item, key, settings) {
   return isWorkday(key, settings) && workdays.length ? monthly / workdays.length : 0;
 }
 export function fixedForDate(state, key) {
+  const override=state.days[key]?.fixedBurden;if(override)return override.enabled?override.amount:0;
   if (key < state.trackingStart) return 0;
   return sum(state.fixed.map(item => fixedItemForDate(item, key, item.settings ?? state.settings)));
 }
@@ -566,9 +567,10 @@ export function convertLegacyFixed(state, key) {
   return legacy.length;
 }
 export function validateState(state) {
-  if (!state || ![1,2,3].includes(state.version) || !isDateKey(state.trackingStart)) throw Error('本地记录版本或日期无效');
+  if (!state || ![1,2,3,4].includes(state.version) || !isDateKey(state.trackingStart)) throw Error('本地记录版本或日期无效');
   validateSettings(state.settings);
   if (state.salaryBaseline !== undefined && (!state.salaryBaseline || !finite(state.salaryBaseline.salary) || state.salaryBaseline.salary < 0 || state.salaryBaseline.salary > 1e9 || !finite(state.salaryBaseline.createdAt) || !isDateKey(state.salaryBaseline.effectiveDate) || !['initial-setup','legacy-confirmed','legacy-real-change'].includes(state.salaryBaseline.source) || state.salaryBaseline.source!=='initial-setup'&&!state.salaryChanges?.some(c=>c.id===state.salaryBaseline.legacyChangeId))) throw Error('首次工资参考无效');
+  if(state.version<4&&(Object.values(state.days??{}).some(d=>d.fixedBurden!==undefined)||(state.calendarAudit??[]).some(e=>e.before?.expenses!==undefined||e.after?.expenses!==undefined)))throw Error('当日费用修改需要新版记录格式，请使用新版应用');
   if(state.payrollOverlayVersion!==undefined&&state.payrollOverlayVersion!==1)throw Error('月度分摊版本无效');
   if(state.overtimePolicyMigration!==undefined&&(!finite(state.overtimePolicyMigration?.changedAt)||!Array.isArray(state.overtimePolicyMigration?.dates)||state.overtimePolicyMigration.dates.some(d=>!isDateKey(d))))throw Error('加班费迁移记录无效');
   if(state.salaryTimelineVersion!==undefined&&state.salaryTimelineVersion!==1)throw Error('工资时间表版本无效');
@@ -585,6 +587,7 @@ export function validateState(state) {
   if (state.dayPlans !== undefined && (!state.dayPlans || Array.isArray(state.dayPlans) || typeof state.dayPlans !== 'object' || Object.keys(state.dayPlans).length > 20000)) throw Error('单日计划结构无效');
   for (const [key, plan] of Object.entries(state.dayPlans ?? {})) { if (!isDateKey(key) || key < state.trackingStart && !state.days?.[key]?.calendar) throw Error('单日计划日期无效'); validateDayPolicy(plan); }
   if (state.calendarAudit !== undefined && (!Array.isArray(state.calendarAudit) || state.calendarAudit.length > 2000 || state.calendarAudit.some(e => !e || typeof e.id !== 'string' || !isDateKey(e.date) || !finite(e.changedAt) || !['edit','undo'].includes(e.action) || (e.action === 'undo' && typeof e.undoOf !== 'string') || !e.before || !e.after || typeof e.before !== 'object' || typeof e.after !== 'object'))) throw Error('日历修改日志无效');
+  for(const entry of state.calendarAudit??[])for(const side of ['before','after'])if(entry[side]?.expenses!==undefined){const rows=entry[side].expenses;if(!Array.isArray(rows)||rows.length>1000||rows.some(e=>!e||e.date!==entry.date||e.scope==='month'||typeof e.id!=='string'||typeof e.name!=='string'||!e.name.trim()||e.name.length>40||!finite(e.amount)||e.amount<=0||e.amount>1e9))throw Error('当日花销修改快照无效');}
   if (!['today', 'month', 'goal', 'hidden'].includes(state.display)) throw Error('金额显示模式无效');
   if (state.goal !== null) {
     validateGoalInput(state.goal);
@@ -600,6 +603,7 @@ export function validateState(state) {
   if (!state.days || typeof state.days !== 'object' || Object.keys(state.days).length > 20000 || !Array.isArray(state.expenses) || !Array.isArray(state.fixed) || state.expenses.length > 100000 || state.fixed.length > 10000) throw Error('本地记录结构无效');
   const earliestRecord = recordingStart(state);
   for (const [key, day] of Object.entries(state.days)) {
+    if(day.fixedBurden!==undefined){const f=day.fixedBurden;if(!f||typeof f.enabled!=='boolean'||!finite(f.changedAt)||f.source!==(f.enabled?'snapshot':'excluded')||!Array.isArray(f.items)||f.items.length>1000||!finite(f.amount)||f.amount<0||f.amount>1e12||f.items.some(i=>!i||typeof i.id!=='string'||typeof i.name!=='string'||!i.name.trim()||i.name.length>40||!finite(i.amount)||i.amount<0||i.amount>1e9)||Math.abs(f.amount-f.items.reduce((v,i)=>v+i.amount,0))>1e-6||!f.enabled&&(f.amount!==0||f.items.length))throw Error('当日固定负担快照无效');}
     if(day.salaryMode!==undefined&&!['schedule','manual'].includes(day.salaryMode))throw Error('当日工资来源无效');
     if (!isDateKey(key) || key < state.trackingStart && (state.version < 2 || !day.calendar || !state.calendarAudit?.some(e=>e.date===key))) throw Error('打卡日期无效');
     validateSettings(day.settings);

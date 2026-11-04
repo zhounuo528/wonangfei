@@ -1,3 +1,4 @@
+import { createAboutUI } from './about-ui.mjs';
 import { createSalaryEditor } from './salary-ui.mjs';
 import { createTimeEditor } from './time-editor.mjs';
 import { calendarInfo } from './calendar.mjs';
@@ -525,7 +526,7 @@ function renderCalendarDetail(key) {
   for(const field of ['earned','expenses','fixed','net'])text(`calendar-detail-${field}`,money(stats[field]));
   text('calendar-detail-overtime-pay',money(stats.overtimePay));text('calendar-detail-fish',duration(stats.fish));text('calendar-detail-overtime',duration(stats.overtime));text('calendar-detail-hourly',stats.hourly===null?'不可计算':`${money(stats.hourly)} / 小时`);
   text('calendar-detail-actual',duration(stats.actual));text('calendar-detail-secondly',stats.secondly===null?'不可计算':`${money(stats.secondly)} / 秒${state.display!=='hidden'&&stats.secondly>0&&stats.secondly<0.01?'（实际速率低于 ¥0.01/秒）':''}`);
-  $('calendar-rework').hidden=isAbsent(info.policy)||!!activeShift(state,now())||latestSummary()?.date!==key;$('calendar-correct-start').hidden=isAbsent(info.policy)||!day?.sessions.length;
+  $('calendar-rework').hidden=isAbsent(info.policy)||!!activeShift(state,now())||latestSummary()?.date!==key;
   text('calendar-detail-snapshot',isAbsent(info.policy)?'原始时段与加班费记录保留，当前按休息 / 请假 / 调休处理。':`该日排班 ${stats.settings.start}–${stats.settings.end}。修改上下班或单日类型前先预览影响。`);
 }
 function moveCalendar(delta) { const date = new Date(`${calendarMonth}-01T00:00:00`); date.setMonth(date.getMonth() + delta); if (date.getFullYear() < 1000 || date.getFullYear() > 9999) return; calendarMonth = dateKey(date).slice(0, 7); renderCalendar(); }
@@ -573,7 +574,7 @@ async function togglePin() {
 }
 document.querySelectorAll('[data-view]').forEach(b => b.addEventListener('click', () => showView(b.dataset.view)));
 document.querySelectorAll('[data-expense]').forEach(b => b.addEventListener('click', () => openExpense(b.dataset.expense)));
-const calendarContext = { state:()=>state, now, money, duration, toast, ask, commit:async(next,baseline)=>{
+const calendarContext = { state:()=>state, now, money, duration, toast, ask, editArrangement:key=>calendarEditor.open(key),commit:async(next,baseline)=>{
   await saveTail.catch(()=>{}); if(JSON.stringify(state)!==baseline)throw Error('记录已变化，请重新预览后保存');
   const revision=++saveRevision;text('save-status','正在保存…');let failure;
   saveTail=saveTail.catch(()=>{}).then(async()=>{if(!api)throw Error('本地保存不可用');await api.save(next);state=next;if(revision===saveRevision)text('save-status','已保存在本机');return true;}).catch(error=>{failure=error;text('save-status',`保存失败：${error.message}`);return false;});
@@ -596,8 +597,7 @@ for (const id of ['fish-toggle', 'mini-fish']) $(id).addEventListener('click', o
 $('view-breaks').addEventListener('click', () => { renderBreakList(); $('break-list-dialog').showModal(); });
 $('show-summary').addEventListener('click', () => showSummary(latestSummary()));
 $('correct-start').addEventListener('click', () => openStartCorrection(workContextKey(now())));
-$('calendar-correct-start').addEventListener('click', () => timeEditor.open(calendarDetailKey));
-$('calendar-edit-day').addEventListener('click', () => calendarEditor.open(calendarDetailKey));
+$('calendar-edit-day').addEventListener('click', () => timeEditor.open(calendarDetailKey,{details:true}));
 $('calendar-rework').addEventListener('click', () => { try { resumeWork(state, calendarDetailKey, now()); persist(); $('calendar-detail-dialog').close(); $('calendar-dialog').close(); render(); } catch (error) { toast(error.message); } });
 $('collapse-to-tray').addEventListener('click', async () => { if (!requireSetup()) return; try { await saveTail; await api.collapseToTray(structuredClone(state)); } catch (error) { toast(error.message); } });
 $('tray-expense').addEventListener('click', () => openExpense('自定义'));
@@ -645,6 +645,8 @@ $('settings-form').addEventListener('submit',async event=>{event.preventDefault(
   await calendarContext.commit(next,baseline);populateSettings();text('settings-feedback',first?`已保存，首次工资从 ${result.effectiveDate} 生效。`:'设置已保存。');
   if(first){showView('dashboard');toast('考勤和到手工资记好了，开始上班吧。');}
 }catch(error){text('settings-feedback',error.message);}});
+const aboutUI=createAboutUI({api,toast});
+aboutUI.initialize();
 $('export-data').addEventListener('click', async () => { try { await saveTail; const result = await api.exportData(structuredClone(state)); if (!result.canceled) toast('备份已保存到选择的位置'); } catch (e) { toast(e.message); } });
 async function bootstrap() {
   try {
