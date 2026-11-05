@@ -56,13 +56,18 @@ export class BrowserStore {
     const operation = this.tail.catch(() => {}).then(async () => {
       if (this.locked) throw Error('原记录不可覆盖，请先导出备份并刷新页面');
       const db = await this.open(), tx = db.transaction('records', 'readwrite'), done = completed(tx), store = tx.objectStore('records'), key = 'real';
-      const [record, mode] = await Promise.all([request(store.get(key)), request(store.get('mode'))]);
+      const [record, mode, dailyBackup, incomeBackup, autoBackup] = await Promise.all([request(store.get(key)), request(store.get('mode')), request(store.get('before-daily-fees')), request(store.get('before-extra-income')), request(store.get('before-auto-attendance'))]);
       if ((record?.revision ?? 0) !== (this.expected[key] ?? 0) || (mode?.revision ?? 0) !== (this.expected.mode ?? 0)) {
         this.locked = true; tx.abort(); await done.catch(() => {});
         throw Error('其他标签页已更新记录，请先导出当前备份，再刷新读取最新记录');
       }
       const revision = (record?.revision ?? 0) + 1, modeRevision = (mode?.revision ?? 0) + 1;
       try {
+        for(const [version,name,backup] of [[5,'before-daily-fees',dailyBackup],[6,'before-extra-income',incomeBackup],[7,'before-auto-attendance',autoBackup]]) {
+          if(snapshot.version<version||!(record?.state.version<version))continue;
+          if(backup!==undefined){validateState(backup?.state);if(backup.state.version>=version)throw Error('升级前备份已被占用，请保留原记录后核对备份');}
+          else store.put({state:record.state,revision:record.revision,createdAt:Date.now()},name);
+        }
         store.put({ state: snapshot, revision }, key);
         // Keep false for older readers, with the same atomic revision guard.
         store.put({ demo: false, revision: modeRevision }, 'mode');

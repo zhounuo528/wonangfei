@@ -51,7 +51,7 @@ function restate(state, key, now) {
       const stats = dayStats(state, key, stamp), delta = Math.floor(stamp / 60000) - Math.floor(at(key, day.settings.end) / 60000);
       day.summary = { ...day.summary, clockOutAt: stamp, date: key, sessionCount: count, scheduledEnd: day.settings.end,
         status: day.calendar?.kind === 'overtime' ? 'late' : delta < 0 ? 'early' : delta > 0 ? 'late' : 'ontime', attendanceKind: day.calendar?.kind ?? 'work', recalculatedAt: now };
-      for (const field of ['earned','overtimePay','expenses','fixed','net','fish','overtime','actual','hourly']) day.summary[field] = stats[field];
+      for (const field of ['earned','wageEarned','extraIncome','overtimePay','expenses','fixed','net','fish','overtime','actual','hourly']) day.summary[field] = stats[field];
     }
   }
   const month = monthKey(key), saved = state.monthlyReviews?.snapshots?.[month];
@@ -65,11 +65,11 @@ function commit(state, next, key, action, now, undoOf, payrollChanges=[],costs=f
   validateState(next); Object.assign(state, next); return { changed: true, date: key };
 }
 export function fixedBurdenQuote(state,key,now=Date.now()){
-  const inherited=state.fixed.filter(f=>key>=f.from&&(!f.until||key<f.until)).map(f=>({id:f.id,name:f.name,amount:fixedItemForDate(f,key,f.settings??state.settings)})).filter(i=>i.amount>0);
+  const inherited=state.fixed.filter(f=>f.period!=='day'&&key>=f.from&&(!f.until||key<f.until)).map(f=>({id:f.id,name:f.name,amount:fixedItemForDate(f,key,f.settings??state.settings)})).filter(i=>i.amount>0);
   const today=dateKey(new Date(now));
-  const current=state.fixed.filter(f=>today>=f.from&&(!f.until||today<f.until)).map(f=>{const settings=f.settings??state.settings,days=plannedPayDays(key,settings),monthly=f.amount/({month:1,quarter:3,year:12}[f.period]);return{id:f.id,name:f.name,amount:days>0?monthly/days:0};}).filter(i=>i.amount>0);
+  const current=state.fixed.filter(f=>f.period!=='day'&&today>=f.from&&(!f.until||today<f.until)).map(f=>{const settings=f.settings??state.settings,days=plannedPayDays(key,settings),monthly=f.amount/({month:1,quarter:3,year:12}[f.period]);return{id:f.id,name:f.name,amount:days>0?monthly/days:0};}).filter(i=>i.amount>0);
   const original=state.days[key]?.fixedBurden,items=original?.enabled?copy(original.items):inherited.length?inherited:current;
-  const unallocatable=!original?.enabled&&!inherited.length&&state.fixed.some(f=>today>=f.from&&(!f.until||today<f.until)&&plannedPayDays(key,f.settings??state.settings)===0);
+  const unallocatable=!original?.enabled&&!inherited.length&&state.fixed.some(f=>f.period!=='day'&&today>=f.from&&(!f.until||today<f.until)&&plannedPayDays(key,f.settings??state.settings)===0);
   return{unallocatable,items,amount:items.reduce((v,i)=>v+i.amount,0),source:original?.enabled?'saved':inherited.length?'historical':'current',originalAmount:fixedForDate(state,key)};
 }
 function editCosts(state,next,key,input,now){

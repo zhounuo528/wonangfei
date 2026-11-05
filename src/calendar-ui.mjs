@@ -1,3 +1,4 @@
+import {paintChange,changeLine,styleChangeValue,styleAmount} from './money-change.mjs';
 import { renderTimeRows, readTimeRows, appendTimeRow, feeDecision, initFeeControls } from './time-rows.mjs';
 import { at, dateKey, monthKey, effectivePayDays, initialSalaryReference, salaryKnownForDate, payrollDaysForMonth, salaryIsManual, validateState, settleGoal } from './model.mjs';
 import { KIND_LABELS, calendarInfo, editCalendarDay, undoCalendarChange, undoableCalendarChange, calendarImpact, SCHEDULE_FIELDS } from './calendar.mjs';
@@ -6,6 +7,7 @@ const dt = stamp => { const d=new Date(stamp); return `${dateKey(d)}T${String(d.
 export function createCalendarEditor(ctx) {
   let key, info, candidate, baseline, saving=false, manualReference=false;
   const form=$('calendar-edit-form');
+  $('calendar-plan-daily-fixed').addEventListener('click',()=>{if(saving||candidate){ctx.toast('请先保存或取消当天安排的修改');return;}$('calendar-edit-dialog').close();ctx.editDailyCosts(key);});
   const invalidate=()=>{ candidate=null; $('calendar-edit-save').disabled=true; $('calendar-impact').hidden=true; };
   function controls(kindChanged=false) {
     const kind=$('calendar-day-kind').value,absence=['leave','swap','rest'].includes(kind),base=kind==='base',pay=$('calendar-day-pay'),recorded=!!ctx.state().days[key];
@@ -73,15 +75,17 @@ export function createCalendarEditor(ctx) {
     try{
       const state=ctx.state(),stamp=ctx.now(),next=structuredClone(state);const result=editCalendarDay(next,draft(),stamp);$('calendar-fee-fields').hidden=!result.needsFeeDecision;$('calendar-fee-fields').disabled=!result.needsFeeDecision;settleGoal(next,stamp);validateState(next);
       const impact=calendarImpact(state,next,key,stamp);for(const [id,value]of Object.entries({'before-income':ctx.money(impact.before.earned),'after-income':ctx.money(impact.after.earned),'before-net':ctx.money(impact.before.net),'after-net':ctx.money(impact.after.net),'before-hours':ctx.duration(impact.before.actual),'after-hours':ctx.duration(impact.after.actual),'before-goal':ctx.money(impact.goalBefore),'after-goal':ctx.money(impact.goalAfter)}))$(`calendar-impact-${id}`).textContent=value;
+      for(const [field,before,after]of [['income',impact.before.earned,impact.after.earned],['net',impact.before.net,impact.after.net],['goal',impact.goalBefore,impact.goalAfter]]){styleAmount($(`calendar-impact-before-${field}`),before,ctx);styleChangeValue($(`calendar-impact-after-${field}`),before,after,ctx);}
+      styleChangeValue($('calendar-impact-after-hours'),impact.before.actual,impact.after.actual,{state:ctx.state,money:ctx.duration},'neutral');
       $('calendar-impact-scope').textContent=info.future?'未来不记工时或收入；本月已记录的自动工资可能因补班重新分配。':`${key} · 预览截至 ${dt(stamp).replace('T',' ')}；已完成目标的结算保留。`;
-      const changed=(result.payrollChanges??[]).length;const protectedCount=Object.entries(state.days).filter(([d,v])=>d.slice(0,7)===key.slice(0,7)&&(salaryIsManual(v)||v.settings.payDaysMode==='manual')).length;$('calendar-impact-month').textContent=`本月计薪 ${payrollDaysForMonth(state,key)} → ${payrollDaysForMonth(next,key)} 天；本月已累计净额 ${ctx.money(impact.monthBefore.net)} → ${ctx.money(impact.monthAfter.net)}。重分 ${changed} 个自动记录，保留 ${protectedCount} 个手动例外；原有费用分摊保留。`;
+      const changed=(result.payrollChanges??[]).length;const protectedCount=Object.entries(state.days).filter(([d,v])=>d.slice(0,7)===key.slice(0,7)&&(salaryIsManual(v)||v.settings.payDaysMode==='manual')).length;paintChange($('calendar-impact-month'),[`本月计薪 ${payrollDaysForMonth(state,key)} → ${payrollDaysForMonth(next,key)} 天；`,{label:'本月已累计净额',before:impact.monthBefore.net,after:impact.monthAfter.net},`。重分 ${changed} 个自动记录，保留 ${protectedCount} 个手动例外；原有费用分摊保留。`],ctx);
       baseline=JSON.stringify(state);candidate=next;$('calendar-impact').hidden=false;$('calendar-edit-save').disabled=false;
     }catch(e){$('calendar-edit-error').textContent=e.message;if(e.calendarFeeRequired){$('calendar-fee-fields').hidden=false;$('calendar-fee-fields').disabled=false;}}
   });
   form.addEventListener('submit',async event=>{event.preventDefault();if(!candidate||saving)return;saving=true;$('calendar-edit-save').disabled=true;
     try{await ctx.commit(candidate,baseline);$('calendar-edit-dialog').close();ctx.toast('这一天已更新，记录与统计重新算好了');}catch(e){$('calendar-edit-error').textContent=e.message;}finally{saving=false;$('calendar-edit-save').disabled=!candidate;}
   });
-  $('calendar-undo').addEventListener('click',()=>{try{const state=ctx.state(),next=structuredClone(state),stamp=ctx.now(),base=JSON.stringify(state);undoCalendarChange(next,key,stamp);settleGoal(next,stamp);const i=calendarImpact(state,next,key,stamp);ctx.ask('撤销上次日历修改？',`净额 ${ctx.money(i.before.net)} → ${ctx.money(i.after.net)}；有效工时 ${ctx.duration(i.before.actual)} → ${ctx.duration(i.after.actual)}；目标池 ${ctx.money(i.goalBefore)} → ${ctx.money(i.goalAfter)}。已完成目标结算保留。`,async()=>{try{await ctx.commit(next,base);$('calendar-edit-dialog').close();ctx.toast('上次日历修改已撤销，撤销记录已保留');}catch(e){$('calendar-edit-error').textContent=e.message;}});}catch(e){$('calendar-edit-error').textContent=e.message;}});
+  $('calendar-undo').addEventListener('click',()=>{try{const state=ctx.state(),next=structuredClone(state),stamp=ctx.now(),base=JSON.stringify(state);undoCalendarChange(next,key,stamp);settleGoal(next,stamp);const i=calendarImpact(state,next,key,stamp);ctx.ask('撤销上次日历修改？',changeLine([{label:'净额',before:i.before.net,after:i.after.net},`；有效工时 ${ctx.duration(i.before.actual)} → ${ctx.duration(i.after.actual)}；`,{label:'目标已攒净赚',before:i.goalBefore,after:i.goalAfter},'。已完成目标结算保留。'],ctx),async()=>{try{await ctx.commit(next,base);$('calendar-edit-dialog').close();ctx.toast('上次日历修改已撤销，撤销记录已保留');}catch(e){$('calendar-edit-error').textContent=e.message;}});}catch(e){$('calendar-edit-error').textContent=e.message;}});
   form.addEventListener('input',invalidate);form.addEventListener('change',invalidate);
   $('calendar-day-kind').addEventListener('change',()=>controls(true));$('calendar-day-pay').addEventListener('change',()=>controls());$('calendar-edit-times').addEventListener('change',()=>controls());$('calendar-add-time').addEventListener('click',()=>{appendTimeRow($('calendar-time-rows'),{key,settings:info.settings,now:ctx.now(),prefix:'calendar-actual'});invalidate();});
   initFeeControls('calendar',invalidate);

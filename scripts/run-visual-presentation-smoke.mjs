@@ -1,0 +1,18 @@
+import { mkdtemp, readFile, mkdir } from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+import { createRequire } from 'node:module';
+import { fileURLToPath } from 'node:url';
+import { spawn } from 'node:child_process';
+const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
+const profile=await mkdtemp(path.join(os.tmpdir(),'wonangfei-visual-presentation-'));
+const evidence=process.env.WORKDAY_EVIDENCE_DIR??path.join(root,'evidence',path.basename(profile));await mkdir(evidence,{recursive:true});
+const executable=createRequire(import.meta.url)('electron');
+const command=process.platform==='darwin'?'/usr/bin/open':executable;
+const args=process.platform==='darwin'?['-n','-W',path.resolve(path.dirname(executable),'../..'),'--args',root,'--smoke-test']:[root,'--smoke-test'];
+const child=spawn(command,args,{stdio:'inherit',env:{...process.env,WORKDAY_DATA_DIR:profile,WORKDAY_EVIDENCE_DIR:evidence,WORKDAY_SMOKE_SCRIPT:path.join(root,'scripts/visual-presentation-smoke.cjs')}});
+const code=await new Promise((resolve,reject)=>{child.once('error',reject);child.once('exit',resolve);});
+if(code!==0)throw Error(`Smoke launcher exited ${code}`);
+const result=JSON.parse(await readFile(path.join(evidence,'visual-presentation-results.json'),'utf8'));
+console.log(JSON.stringify({status:result.status,checks:result.checks.length,evidence,profile},null,2));
+if(result.status!=='passed')process.exitCode=1;

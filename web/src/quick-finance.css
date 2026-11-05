@@ -1,0 +1,16 @@
+/* Both halves of the quick card use the same heading and option grid. */
+.quick-card{container-type:inline-size}
+.quick-card .quick-section-heading{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:baseline;gap:8px;margin:0}
+.quick-card .quick-section-heading h2{display:flex;flex-wrap:wrap;align-items:baseline;gap:6px;min-width:0;white-space:normal;margin:0;font-size:16px;font-weight:650;line-height:1.5;letter-spacing:0}
+.quick-card .quick-section-heading h2>svg{display:block;align-self:center;flex:0 0 20px;width:20px;height:20px;margin:0;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;color:#009b79}
+.quick-title-label{white-space:nowrap}
+.quick-card .quick-section-heading h2 strong{min-width:0;max-width:100%;margin:0;font-size:20px;font-weight:650;line-height:1.2;letter-spacing:0;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+.quick-card .quick-section-heading .text-button{min-height:32px;padding:0;font-size:11px;line-height:1.5;white-space:nowrap;margin:0}
+.quick-card .quick-options{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:7px;margin:14px 0 10px}
+.quick-card .quick-options button{display:flex;flex-direction:column;align-items:center;justify-content:flex-start;gap:7px;min-width:0;min-height:62px;padding:0;border:0;background:none;font-size:11px;line-height:1.4;color:#59666b}
+.quick-card .quick-options button>span{display:grid;place-items:center;width:36px;height:36px;flex:0 0 36px;border:1px solid #fff;border-radius:12px;background:#f1f3f7;color:#52616a;box-shadow:0 3px 7px #253b4e09}
+.quick-card .quick-options button>span svg{width:21px;height:21px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
+.quick-card .quick-options button:hover>span{background:#e6f8f3}
+.quick-card #quick-total{color:#bd3c36!important}
+.quick-card #quick-income-total{color:#009b79}
+@container(max-width:300px){.quick-card .quick-options{grid-template-columns:repeat(3,minmax(0,1fr))}}

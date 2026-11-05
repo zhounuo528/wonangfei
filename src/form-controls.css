@@ -1,0 +1,98 @@
+/* Keep focus on the control's own edge; buttons and links retain their rings. */
+input:not([type=checkbox]):not([type=radio]):focus,
+textarea:focus,
+select:focus {
+  outline:none;
+  box-shadow:none;
+  border-color:#08795f;
+}
+.input-currency:focus-within { border-color:#08795f; }
+.input-currency input:focus { outline:none; box-shadow:none; }
+input[type=checkbox]:focus-visible,input[type=radio]:focus-visible {
+  outline:2px solid #08795f;
+  outline-offset:-2px;
+}
+.weekdays input:focus-visible+span,.duration-options input:focus-visible+span {
+  outline:none;
+  border-color:#08795f;
+}
+.close-button {
+  position:relative;
+  display:grid;
+  place-items:center;
+  inline-size:44px;
+  block-size:44px;
+  min-inline-size:44px;
+  min-block-size:44px;
+  flex:0 0 44px;
+  padding:0;
+  font-size:0;
+  color:#53616d;
+  background:transparent;
+}
+.close-button::before {
+  content:"";
+  inline-size:22px;
+  block-size:22px;
+  background:currentColor;
+  mask:url('close-plus.png') center/contain no-repeat;
+  transform:rotate(45deg);
+}
+/* Keep the long settings form readable and use the adjacent space for help. */
+#settings-view { display:grid; grid-template-columns:minmax(0,1.7fr) minmax(280px,1fr); gap:20px; align-items:start; }
+#settings-view>.card { inline-size:100%; max-inline-size:none; margin:0; min-inline-size:0; }
+#settings-form { padding:24px; }
+#settings-form>.section-top { margin-block-end:20px; }
+#settings-form .reminder-setting { margin-block:16px; padding:14px 16px; }
+@media(min-width:1101px) and (min-height:700px) {
+  #settings-view>.list-card { position:sticky; inset-block-start:18px; }
+}
+@media(max-width:1100px) {
+  #settings-view { grid-template-columns:minmax(0,1fr); gap:16px; }
+}
+@media(max-width:520px) {
+  #settings-form { padding:20px; }
+}
+
+/* Native semantics, form validation and keyboard behavior are preserved.
+   Browsers without base-select keep their ordinary system picker. */
+@supports (appearance:base-select) {
+  select,select::picker(select) { appearance:base-select; }
+  select { gap:12px; align-items:center; }
+  select:open { border-color:#08795f; color:#08795f; }
+  select::picker-icon { color:#687480; }
+  select:open::picker-icon { rotate:180deg; color:#08795f; }
+  select::picker(select) {
+    box-sizing:border-box;
+    margin-block:6px;
+    padding:6px;
+    border:1px solid #edf0f4;
+    border-radius:20px;
+    background:#fff;
+    color:#4e5964;
+    box-shadow:0 16px 48px #23384d1c;
+    max-block-size:min(360px,70dvh);
+    max-inline-size:calc(100dvw - 24px);
+    overflow:auto;
+    overscroll-behavior:contain;
+  }
+  select option {
+    min-block-size:44px;
+    padding:11px 14px;
+    border:0;
+    border-radius:13px;
+    white-space:normal;
+    overflow-wrap:anywhere;
+    gap:10px;
+  }
+  select option:checked { background:#eaf7f2; color:#08795f; font-weight:650; }
+  select option:hover,select option:focus { background:#f1f5f8; outline:none; }
+  select option:checked:focus { background:#dff2e9; }
+  select option:disabled { color:#9199a3; }
+  select option::checkmark { color:#08795f; }
+}
+@media (forced-colors:active) {
+  input:focus,textarea:focus,select:focus,.input-currency:focus-within { border-color:Highlight; }
+  .weekdays input:focus-visible+span,.duration-options input:focus-visible+span { border-color:Highlight; }
+  select option:checked { color:HighlightText; background:Highlight; }
+}

@@ -1,4 +1,5 @@
 const fs = require('node:fs/promises');
+const { constants } = require('node:fs');
 const path = require('node:path');
 const { pathToFileURL } = require('node:url');
 
@@ -45,6 +46,21 @@ class LocalStore {
     const target = this.file();
     if (this.locked.has(target)) throw Error('原记录读取失败，已阻止覆盖；请先保留原文件并检查');
     this.tail = this.tail.catch(() => {}).then(async () => {
+      if (state.version >= 5) {
+        try {
+          const previous = JSON.parse(await fs.readFile(target, 'utf8'));
+          for (const [version,name] of [[5,'state-before-daily-fees.json'],[6,'state-before-extra-income.json'],[7,'state-before-auto-attendance.json']]) {
+            if(state.version<version||previous.version>=version)continue;
+            try { await fs.copyFile(target, path.join(this.directory,name), constants.COPYFILE_EXCL); }
+            catch(error) {
+              if(error.code!=='EEXIST')throw error;
+              const backup=JSON.parse(await fs.readFile(path.join(this.directory,name),'utf8'));
+              (await this.model()).validateState(backup);
+              if(backup.version>=version)throw Error('升级前备份已被占用，请保留原记录后核对备份');
+            }
+          }
+        } catch(error) { if(error.code!=='ENOENT')throw error; }
+      }
       await this.atomic(target, encoded);
       this.currentState = state;
     });

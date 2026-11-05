@@ -1,0 +1,22 @@
+/* Explicit comparisons only. Ordinary positive static values are not trends. */
+.money-change{overflow-wrap:anywhere}
+.change-value{font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+.change-value[data-change-tone="improved"]{color:#007b60}
+.change-value[data-change-tone="worsened"],.negative-money{color:#b73532!important}
+.change-value::after{content:"（" attr(data-change-label) "）";display:inline;font-size:.86em;line-height:1.6;font-weight:500;white-space:normal;overflow-wrap:anywhere}
+.change-value[data-change-tone="improved"]::after{color:#007b60}
+.change-value[data-change-tone="worsened"]::after{color:#b73532}
+.change-value[data-change-tone="same"],.change-value[data-change-tone="neutral"],.change-value[data-change-tone="unknown"],.change-value[data-change-tone="hidden"]{color:inherit}
+.change-value[data-change-tone="same"]::after,.change-value[data-change-tone="neutral"]::after,.change-value[data-change-tone="unknown"]::after,.change-value[data-change-tone="hidden"]::after{color:#66737b}
+.change-before.negative-money,.change-value.negative-money{color:#b73532!important}
+.money-change+.money-change{margin-left:8px}
+.salary-impact td,.calendar-impact td{overflow-wrap:anywhere}
+/* Expense fields are outflows; the red type label is not a trend indicator. */
+#sum-expenses,#sum-fixed,#fixed-total,#summary-costs,#report-costs,
+#calendar-detail-expenses,#calendar-detail-fixed,
+#quick-expense-list .overview-cost-row b,#fixed-overview-list .overview-cost-row b,
+#expense-list .row-value,#fixed-list .row-value{color:#b73532!important}
+
+.report-overtime-comparison[data-change-tone="improved"]{background:#e6f8f3;border-color:#c9ece0}
+.report-overtime-comparison[data-change-tone="worsened"]{background:#fff2f2;border-color:#f0d0d0}
+.report-overtime-comparison[data-change-tone="same"],.report-overtime-comparison[data-change-tone="mixed"],.report-overtime-comparison[data-change-tone="unknown"],.report-overtime-comparison[data-change-tone="hidden"]{background:#f3f6f8;border-color:#e0e6eb}
