@@ -1,0 +1,16 @@
+.goal-meta {
+    margin-top: 14rpx;
+}
+
+.foot-note {
+    display: block;
+    margin-top: 20rpx;
+    font-size: 22rpx;
+    line-height: 1.6;
+}
+
+.item-sub {
+    display: block;
+    margin-top: 4rpx;
+    font-size: 22rpx;
+}

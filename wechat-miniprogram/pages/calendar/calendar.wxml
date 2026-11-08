@@ -1,0 +1,75 @@
+<view class="page">
+    <view class="cal-head">
+        <view class="month-nav" bindtap="handlePrevMonth">‹</view>
+        <view class="month-center">
+            <text class="month-label">{{monthLabel}}</text>
+            <text class="muted month-link" bindtap="handleToday">回到今天</text>
+        </view>
+        <view class="month-nav" bindtap="handleNextMonth">›</view>
+    </view>
+
+    <view class="card cal-card">
+        <view class="weekday-row">
+            <text class="weekday" wx:for="{{weekdayLabels}}" wx:key="*this">{{item}}</text>
+        </view>
+        <view class="grid">
+            <view
+                class="cell {{item.blank ? 'cell-blank' : item.tone}} {{item.isSelected ? 'cell-selected' : ''}} {{item.isToday ? 'cell-today' : ''}}"
+                wx:for="{{cells}}"
+                wx:key="id"
+                data-key="{{item.key}}"
+                bindtap="{{item.blank ? 'noop' : 'handleSelectDay'}}"
+            >
+                <block wx:if="{{!item.blank}}">
+                    <text class="cell-day">{{item.label}}</text>
+                    <text class="cell-net {{item.netNegative ? 'negative' : ''}}" wx:if="{{item.netText !== ''}}">{{item.netText}}</text>
+                    <text class="cell-dot" wx:else>·</text>
+                </block>
+            </view>
+        </view>
+        <view class="legend">
+            <view class="legend-item" wx:for="{{legend}}" wx:key="key">
+                <view class="legend-dot {{item.tone}}"></view>
+                <text class="muted">{{item.text}}</text>
+            </view>
+        </view>
+    </view>
+
+    <view class="card summary-card" wx:if="{{monthSummary}}">
+        <view class="card-head">
+            <text class="card-title">本月概览</text>
+            <text class="link" bindtap="goReport">月报 ›</text>
+        </view>
+        <view class="row-between">
+            <view class="sum-item"><text class="muted">净额</text><text class="sum-value {{monthSummary.negative ? 'negative' : ''}}">{{monthSummary.net}}</text></view>
+            <view class="sum-item"><text class="muted">总收入</text><text class="sum-value">{{monthSummary.earned}}</text></view>
+            <view class="sum-item"><text class="muted">成本</text><text class="sum-value">{{monthSummary.costs}}</text></view>
+            <view class="sum-item"><text class="muted">出勤天数</text><text class="sum-value">{{monthSummary.workedDays}}</text></view>
+        </view>
+    </view>
+
+    <view class="card" wx:if="{{detail}}">
+        <view class="card-head">
+            <view>
+                <text class="card-title">{{detail.dateLabel}}</text>
+                <text class="muted detail-plan">{{detail.planText}} · {{detail.planTime}}</text>
+            </view>
+            <text class="pill {{detail.statusTone}}">{{detail.statusLabel}}</text>
+        </view>
+
+        <view class="time-row">
+            <view class="time-item"><text class="muted">上班记录</text><text class="time-value">{{detail.startText}}</text></view>
+            <view class="time-item"><text class="muted">实际下班</text><text class="time-value">{{detail.endText}}{{detail.openSession ? '（进行中）' : ''}}</text></view>
+        </view>
+
+        <block wx:if="{{detail.rows.length > 0}}">
+            <view class="divider"></view>
+            <view class="detail-row" wx:for="{{detail.rows}}" wx:key="label">
+                <text class="muted">{{item.label}}</text>
+                <text class="detail-value {{item.negative ? 'negative' : ''}}">{{item.value}}</text>
+            </view>
+        </block>
+
+        <text class="muted detail-note" wx:if="{{detail.note !== ''}}">{{detail.note}}</text>
+    </view>
+</view>

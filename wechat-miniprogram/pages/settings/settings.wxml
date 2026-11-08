@@ -1,0 +1,139 @@
+<view class="page">
+    <view class="card">
+        <view class="card-head">
+            <text class="card-title">薪资与排班</text>
+            <text class="pill">CNY 人民币</text>
+        </view>
+
+        <view class="field">
+            <text class="field-label">每周怎么上班</text>
+            <picker mode="selector" range="{{scheduleModes}}" range-key="label" value="{{scheduleIndex}}" bindchange="handleScheduleMode">
+                <view class="field-input picker-value">
+                    {{scheduleModes[scheduleIndex].label}} · {{scheduleModes[scheduleIndex].hint}}
+                </view>
+            </picker>
+        </view>
+
+        <view class="field">
+            <text class="field-label">工作日（可调整）</text>
+            <view class="chip-row">
+                <view class="chip chip-round {{item.active ? 'chip-active' : ''}}" wx:for="{{weekdays}}" wx:key="value" data-value="{{item.value}}" bindtap="toggleWeekday">{{item.label}}</view>
+            </view>
+        </view>
+
+        <block wx:if="{{scheduleMode === 'alternating'}}">
+            <view class="field">
+                <text class="field-label">基准周的周一</text>
+                <picker mode="date" value="{{anchorWeek}}" bindchange="handleAnchorWeek">
+                    <view class="field-input picker-value">{{anchorWeek}}</view>
+                </picker>
+            </view>
+            <view class="field">
+                <text class="field-label">基准周是</text>
+                <view class="chip-row">
+                    <view class="chip {{anchorKind === 'double' ? 'chip-active' : ''}}" data-kind="double" bindtap="handleAnchorKind">双休周</view>
+                    <view class="chip {{anchorKind === 'single' ? 'chip-active' : ''}}" data-kind="single" bindtap="handleAnchorKind">单休周</view>
+                </view>
+            </view>
+            <view class="field">
+                <text class="field-label">单休周的工作日</text>
+                <view class="chip-row">
+                    <view class="chip chip-round {{item.active ? 'chip-active' : ''}}" wx:for="{{alternateWeekdays}}" wx:key="value" data-value="{{item.value}}" bindtap="toggleAlternateWeekday">{{item.label}}</view>
+                </view>
+            </view>
+        </block>
+
+        <view class="field">
+            <text class="field-label">每月到手工资（元）</text>
+            <input class="field-input" type="digit" placeholder="例如 6000.00" value="{{salary}}" data-field="salary" bindinput="handleInput" />
+        </view>
+
+        <view class="field">
+            <text class="field-label">计薪方式</text>
+            <view class="chip-row">
+                <view class="chip {{payDaysMode === 'auto' ? 'chip-active' : ''}}" data-mode="auto" bindtap="handlePayDaysMode">按当月考勤自动计算</view>
+                <view class="chip {{payDaysMode === 'manual' ? 'chip-active' : ''}}" data-mode="manual" bindtap="handlePayDaysMode">手动调整本月</view>
+            </view>
+        </view>
+
+        <view class="field" wx:if="{{payDaysMode === 'manual'}}">
+            <text class="field-label">本月计薪天数</text>
+            <input class="field-input" type="digit" placeholder="例如 21" value="{{payDays}}" data-field="payDays" bindinput="handleInput" />
+        </view>
+
+        <view class="field">
+            <text class="field-label">上班时间</text>
+            <picker mode="time" value="{{start}}" data-field="start" bindchange="handleInput">
+                <view class="field-input picker-value">{{start}}</view>
+            </picker>
+        </view>
+        <view class="field">
+            <text class="field-label">下班时间</text>
+            <picker mode="time" value="{{end}}" data-field="end" bindchange="handleInput">
+                <view class="field-input picker-value">{{end}}</view>
+            </picker>
+        </view>
+
+        <view class="switch-row">
+            <text class="switch-label">扣除午休时间（午休不计薪）</text>
+            <switch checked="{{lunch}}" color="#0f9d76" bindchange="handleLunch" />
+        </view>
+
+        <block wx:if="{{lunch}}">
+            <view class="field">
+                <text class="field-label">午休开始</text>
+                <picker mode="time" value="{{lunchStart}}" data-field="lunchStart" bindchange="handleInput">
+                    <view class="field-input picker-value">{{lunchStart}}</view>
+                </picker>
+            </view>
+            <view class="field">
+                <text class="field-label">午休结束</text>
+                <picker mode="time" value="{{lunchEnd}}" data-field="lunchEnd" bindchange="handleInput">
+                    <view class="field-input picker-value">{{lunchEnd}}</view>
+                </picker>
+            </view>
+        </block>
+
+        <text class="error-text" wx:if="{{error !== ''}}">{{error}}</text>
+        <text class="muted message" wx:if="{{message !== ''}}">{{message}}</text>
+        <button class="primary" bindtap="save">保存设置</button>
+        <text class="muted foot-note">首次点击开始会按当天设定的上班时间补算到现在；工资只在排班内增长，摸鱼不扣工资。排班与计薪天数只影响新日期，已记录的工时和花销保留原样。</text>
+    </view>
+
+    <view class="card">
+        <view class="card-head">
+            <text class="card-title">自动记录与提醒</text>
+        </view>
+
+        <view class="switch-row">
+            <view class="switch-copy">
+                <text class="switch-label">自动上下班</text>
+                <text class="muted switch-hint">适合固定作息。关闭小程序时不执行，重新打开后按时间戳补记开启期间的普通工作日。</text>
+            </view>
+            <switch checked="{{autoAttendance}}" color="#0f9d76" bindchange="toggleAutoAttendance" />
+        </view>
+
+        <view class="switch-row">
+            <view class="switch-copy">
+                <text class="switch-label">上班打卡提醒</text>
+                <text class="muted switch-hint">到点未打卡时在小程序内提醒；请假、调休和休息日跳过。</text>
+            </view>
+            <switch checked="{{clockInReminder}}" color="#0f9d76" bindchange="toggleClockIn" />
+        </view>
+
+        <view class="switch-row">
+            <view class="switch-copy">
+                <text class="switch-label">下班提醒</text>
+                <text class="muted switch-hint">到点弹出一次下班提示，每个工作日只提醒一次。</text>
+            </view>
+            <switch checked="{{endReminder}}" color="#0f9d76" bindchange="toggleEndReminder" />
+        </view>
+    </view>
+
+    <view class="card">
+        <view class="card-head">
+            <text class="card-title">计算说明</text>
+        </view>
+        <text class="muted note">工资按薪资与考勤计算，确认的加班费另计，净额扣除花销与固定负担。关闭或休眠不会停止已开始的当天记录；未点下班按时间戳累计加班。未点击开始的日期不补算工资。使用本机时区和时钟，切换时区或手动改时间可能影响结果。</text>
+    </view>
+</view>

@@ -1,0 +1,45 @@
+{
+  "pages": [
+    "pages/today/today",
+    "pages/calendar/calendar",
+    "pages/costs/costs",
+    "pages/mine/mine",
+    "pages/goal/goal",
+    "pages/report/report",
+    "pages/settings/settings"
+  ],
+  "window": {
+    "navigationBarTitleText": "窝囊费",
+    "navigationBarBackgroundColor": "#f7f8fa",
+    "navigationBarTextStyle": "black",
+    "backgroundColor": "#f7f8fa",
+    "backgroundTextStyle": "dark"
+  },
+  "tabBar": {
+    "color": "#8b9099",
+    "selectedColor": "#0f9d76",
+    "backgroundColor": "#ffffff",
+    "borderStyle": "white",
+    "list": [
+      {
+        "pagePath": "pages/today/today",
+        "text": "工作台"
+      },
+      {
+        "pagePath": "pages/calendar/calendar",
+        "text": "小月历"
+      },
+      {
+        "pagePath": "pages/costs/costs",
+        "text": "账本"
+      },
+      {
+        "pagePath": "pages/mine/mine",
+        "text": "我的"
+      }
+    ]
+  },
+  "style": "v2",
+  "sitemapLocation": "sitemap.json",
+  "lazyCodeLoading": "requiredComponents"
+}

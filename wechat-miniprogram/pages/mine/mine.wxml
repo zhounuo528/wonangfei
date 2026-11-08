@@ -1,0 +1,72 @@
+<view class="page">
+    <view class="profile">
+        <view class="avatar">窝</view>
+        <view class="profile-main">
+            <text class="profile-name">窝囊费</text>
+            <text class="muted">让每一秒，都有回报</text>
+        </view>
+    </view>
+
+    <view class="card">
+        <view class="stat-row">
+            <view class="stat">
+                <text class="muted">今日净额</text>
+                <text class="stat-value {{todayNetNegative ? 'negative' : ''}}">{{todayNet}}</text>
+            </view>
+            <view class="stat">
+                <text class="muted">{{monthLabel}}净额</text>
+                <text class="stat-value">{{monthNet}}</text>
+            </view>
+            <view class="stat">
+                <text class="muted">出勤记录</text>
+                <text class="stat-value">{{recordedDays}} 天</text>
+            </view>
+        </view>
+    </view>
+
+    <view class="card menu-card">
+        <view class="menu-item" bindtap="goGoal">
+            <text class="menu-title">赚钱目标</text>
+            <text class="menu-value">{{goalName}} · {{goalPercentText}} ›</text>
+        </view>
+        <view class="menu-item" bindtap="goReport">
+            <text class="menu-title">周报与月报</text>
+            <text class="menu-value">看看时间卖去哪儿了 ›</text>
+        </view>
+        <view class="menu-item" bindtap="goSettings">
+            <text class="menu-title">薪资与排班</text>
+            <text class="menu-value">月薪、考勤、午休 ›</text>
+        </view>
+        <view class="menu-item" bindtap="goCosts">
+            <text class="menu-title">账本</text>
+            <text class="menu-value">花销、固定负担、意外之财 ›</text>
+        </view>
+    </view>
+
+    <view class="card">
+        <view class="card-head">
+            <text class="card-title">数据</text>
+            <text class="muted">{{savedAtText}}</text>
+        </view>
+        <view class="menu-item" bindtap="exportBackup">
+            <text class="menu-title">导出备份</text>
+            <text class="menu-value">复制到剪贴板 ›</text>
+        </view>
+        <view class="menu-item" bindtap="importBackup">
+            <text class="menu-title">导入备份</text>
+            <text class="menu-value">从剪贴板读取 ›</text>
+        </view>
+        <view class="menu-item" bindtap="clearData">
+            <text class="menu-title danger">清空本机记录</text>
+            <text class="menu-value danger">不可恢复 ›</text>
+        </view>
+        <text class="muted foot-note">小程序的数据只存在这台设备的微信里。换手机、清理微信存储或删除小程序都可能丢失记录，请定期导出备份。</text>
+    </view>
+
+    <view class="card">
+        <view class="menu-item" bindtap="showAbout">
+            <text class="menu-title">关于窝囊费</text>
+            <text class="menu-value">0.5.0 · 小程序版 ›</text>
+        </view>
+    </view>
+</view>

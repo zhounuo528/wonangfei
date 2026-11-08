@@ -1,0 +1,81 @@
+.profile {
+    display: flex;
+    align-items: center;
+    padding: 16rpx 8rpx 32rpx;
+}
+
+.avatar {
+    width: 96rpx;
+    height: 96rpx;
+    border-radius: 28rpx;
+    background: #e8f7f2;
+    color: #0f9d76;
+    font-size: 40rpx;
+    font-weight: 600;
+    line-height: 96rpx;
+    text-align: center;
+}
+
+.profile-main {
+    display: flex;
+    flex-direction: column;
+    margin-left: 24rpx;
+}
+
+.profile-name {
+    font-size: 36rpx;
+    font-weight: 600;
+}
+
+.stat-row {
+    display: flex;
+}
+
+.stat {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+}
+
+.stat-value {
+    margin-top: 6rpx;
+    font-size: 30rpx;
+    font-weight: 600;
+}
+
+.menu-card {
+    padding: 8rpx 32rpx;
+}
+
+.menu-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 26rpx 0;
+    border-bottom: 1rpx solid #f3f5f7;
+}
+
+.menu-item:last-child {
+    border-bottom: none;
+}
+
+.menu-title {
+    font-size: 28rpx;
+}
+
+.menu-value {
+    color: #8b9099;
+    font-size: 24rpx;
+}
+
+.danger {
+    color: #d4380d;
+}
+
+.foot-note {
+    display: block;
+    padding-top: 20rpx;
+    border-top: 1rpx solid #f3f5f7;
+    font-size: 22rpx;
+    line-height: 1.6;
+}

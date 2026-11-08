@@ -1,0 +1,199 @@
+<view class="page">
+    <view class="topbar">
+        <view>
+            <text class="eyebrow">{{dateLabel}} · {{weekday}}</text>
+            <text class="page-title">我的工作台</text>
+        </view>
+        <text class="pill {{statusTone}}">{{statusLabel}}</text>
+    </view>
+
+    <view class="card hero">
+        <view class="hero-head">
+            <picker mode="selector" range="{{displayOptions}}" range-key="label" value="{{displayIndex}}" bindchange="handleDisplayChange">
+                <view class="display-switch">{{displayLabel}}<text class="caret">▾</text></view>
+            </picker>
+        </view>
+        <view class="hero-amount {{heroNegative ? 'negative' : ''}}">
+            <text class="cny">¥</text>
+            <text class="amount">{{heroAmount}}</text>
+        </view>
+        <text class="hero-caption">{{heroCaption}}</text>
+        <view class="hero-rates">
+            <view class="rate">
+                <text class="rate-label">平均秒薪</text>
+                <text class="rate-value">{{secondRate}}</text>
+            </view>
+            <view class="rate">
+                <text class="rate-label">平均时薪</text>
+                <text class="rate-value">{{hourRate}}</text>
+            </view>
+            <view class="rate">
+                <text class="rate-label">今日工时</text>
+                <text class="rate-value">{{workedText}}</text>
+            </view>
+        </view>
+    </view>
+
+    <view class="card shift-card">
+        <view class="card-head">
+            <text class="card-title">{{shiftLabel}}</text>
+            <text class="muted">计划下班 {{shiftEnd}}</text>
+        </view>
+        <text class="countdown">{{countdown}}</text>
+        <view class="progress-track">
+            <view class="progress-fill" style="width: {{progressPercent}}%"></view>
+        </view>
+        <view class="row-between shift-meta">
+            <text class="muted">{{shiftSummary}}</text>
+            <text class="muted">计薪 {{progressPercent}}%</text>
+        </view>
+        <text class="started">{{startedText}}</text>
+        <button class="primary" bindtap="handleWorkToggle">{{workButtonText}}</button>
+    </view>
+
+    <view class="card">
+        <view class="card-head">
+            <text class="card-title">收入与支出</text>
+            <text class="muted">今日</text>
+        </view>
+        <view class="money-grid">
+            <view class="money-item">
+                <text class="m-label">总收入</text>
+                <text class="m-value">{{earnedText}}</text>
+            </view>
+            <view class="money-item">
+                <text class="m-label">生活花销</text>
+                <text class="m-value">{{expenseText}}</text>
+            </view>
+            <view class="money-item">
+                <text class="m-label">固定负担</text>
+                <text class="m-value">{{fixedText}}</text>
+            </view>
+        </view>
+        <view class="divider"></view>
+        <view class="row-between">
+            <text class="muted">扣除之后净赚</text>
+            <text class="net-value {{netNegative ? 'negative' : ''}}">{{netText}}</text>
+        </view>
+        <view class="breakdown">
+            <text>工资 {{wageText}}</text>
+            <text>加班费 {{overtimePayText}}</text>
+            <text>意外之财 {{extraText}}</text>
+        </view>
+    </view>
+
+    <view class="card">
+        <view class="card-head">
+            <text class="card-title">快速记一笔花销</text>
+            <text class="muted">今日</text>
+        </view>
+        <view class="quick-grid">
+            <view class="quick-btn" wx:for="{{quickCategories}}" wx:key="*this" data-name="{{item}}" bindtap="openExpenseSheet">{{item}}</view>
+            <view class="quick-btn" data-name="自定义" bindtap="openExpenseSheet">＋ 自定义</view>
+        </view>
+    </view>
+
+    <view class="card">
+        <view class="card-head">
+            <text class="card-title">摸鱼一下</text>
+            <text class="link" bindtap="openFishSheet">添加</text>
+        </view>
+        <view class="row-between">
+            <text class="fish-time">{{fishText}}</text>
+            <text class="muted">{{fishCaption}}</text>
+        </view>
+        <view class="divider"></view>
+        <view class="row-between">
+            <text class="muted">实际有效工作 {{actualText}}</text>
+            <text class="muted">有效时薪 {{effectiveHourText}}</text>
+        </view>
+    </view>
+
+    <view class="card" bindtap="goGoal">
+        <view class="card-head">
+            <text class="card-title">{{goalName}}</text>
+            <text class="link">设置 ›</text>
+        </view>
+        <view class="progress-track">
+            <view class="progress-fill" style="width: {{goalPercent}}%"></view>
+        </view>
+        <view class="row-between goal-meta">
+            <text class="muted">{{goalAmounts}}</text>
+            <text class="muted">{{goalPercentText}}</text>
+        </view>
+    </view>
+</view>
+
+<view class="mask" wx:if="{{showExpenseSheet}}" bindtap="closeExpenseSheet"></view>
+<view class="sheet" wx:if="{{showExpenseSheet}}">
+    <text class="sheet-title">记一笔 · {{expenseCategory}}</text>
+    <view class="field">
+        <text class="field-label">金额（元）</text>
+        <input class="field-input" type="digit" placeholder="例如 25.50" value="{{expenseAmount}}" bindinput="handleExpenseAmount" focus="{{showExpenseSheet}}" />
+    </view>
+    <text class="error-text" wx:if="{{expenseError !== ''}}">{{expenseError}}</text>
+    <view class="sheet-actions">
+        <button class="sheet-button quiet" bindtap="closeExpenseSheet">取消</button>
+        <button class="sheet-button primary" bindtap="saveExpense">保存花销</button>
+    </view>
+</view>
+
+<view class="mask" wx:if="{{showFishSheet}}" bindtap="closeFishSheet"></view>
+<view class="sheet" wx:if="{{showFishSheet}}">
+    <text class="sheet-title">添加摸鱼时间</text>
+    <view class="field">
+        <text class="field-label">这次休息多久（分钟，1–1440）</text>
+        <input class="field-input" type="number" value="{{fishMinutes}}" bindinput="handleFishMinutes" />
+    </view>
+    <view class="field">
+        <text class="field-label">事项</text>
+        <view class="chip-row">
+            <view class="chip {{fishKind === item ? 'chip-active' : ''}}" wx:for="{{fishKinds}}" wx:key="*this" data-kind="{{item}}" bindtap="handleFishKind">{{item}}</view>
+        </view>
+    </view>
+    <view class="field" wx:if="{{fishKind === '自定义'}}">
+        <text class="field-label">自定义事项</text>
+        <input class="field-input" maxlength="40" placeholder="例如 发呆" value="{{fishCustom}}" bindinput="handleFishCustom" />
+    </view>
+    <text class="error-text" wx:if="{{fishError !== ''}}">{{fishError}}</text>
+    <view class="sheet-actions">
+        <button class="sheet-button quiet" bindtap="closeFishSheet">取消</button>
+        <button class="sheet-button primary" bindtap="saveFish">添加</button>
+    </view>
+</view>
+
+<view class="mask" wx:if="{{showOvertimeSheet}}"></view>
+<view class="sheet" wx:if="{{showOvertimeSheet}}">
+    <text class="sheet-title">不会又免费加班吧？</text>
+    <text class="muted sheet-note">本次加班已超过 2 小时，请选择加班费处理方式。</text>
+    <view class="field">
+        <text class="field-label">本次加班费（元）</text>
+        <input class="field-input" type="digit" placeholder="例如 120.00" value="{{overtimeAmount}}" bindinput="handleOvertimeAmount" />
+    </view>
+    <text class="error-text" wx:if="{{overtimeError !== ''}}">{{overtimeError}}</text>
+    <view class="sheet-actions">
+        <button class="sheet-button quiet" bindtap="handleOvertimeFree">免费加班</button>
+        <button class="sheet-button primary" bindtap="handleOvertimePaid">填写并下班</button>
+    </view>
+</view>
+
+<view class="mask" wx:if="{{showSummary}}" bindtap="closeSummary"></view>
+<view class="sheet" wx:if="{{showSummary}}">
+    <text class="sheet-title">今天辛苦了。</text>
+    <text class="muted sheet-note">{{summary.date}} 的下班总结</text>
+    <view class="summary-hero">
+        <text class="muted">今日预计净赚</text>
+        <text class="summary-amount {{summary.netNegative ? 'negative' : ''}}">{{summary.net}}</text>
+    </view>
+    <view class="summary-grid">
+        <view class="summary-item"><text class="muted">总收入</text><text class="strong">{{summary.earned}}</text></view>
+        <view class="summary-item"><text class="muted">工资与加班费</text><text class="strong">{{summary.wage}}</text></view>
+        <view class="summary-item"><text class="muted">意外之财</text><text class="strong">{{summary.extra}}</text></view>
+        <view class="summary-item"><text class="muted">花销 + 固定</text><text class="strong">{{summary.costs}}</text></view>
+        <view class="summary-item"><text class="muted">摸鱼</text><text class="strong">{{summary.fish}}</text></view>
+        <view class="summary-item"><text class="muted">加班</text><text class="strong">{{summary.overtime}}</text></view>
+        <view class="summary-item"><text class="muted">有效工作</text><text class="strong">{{summary.actual}}</text></view>
+        <view class="summary-item"><text class="muted">有效时薪</text><text class="strong">{{summary.hourly}}</text></view>
+    </view>
+    <button class="primary" bindtap="closeSummary">收工</button>
+</view>

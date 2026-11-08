@@ -1,0 +1,163 @@
+<view class="page">
+    <view class="tabs">
+        <view class="tab {{tab === item.key ? 'tab-active' : ''}}" wx:for="{{tabs}}" wx:key="key" data-key="{{item.key}}" bindtap="handleTab">{{item.label}}</view>
+    </view>
+
+    <block wx:if="{{tab === 'expenses'}}">
+        <view class="card">
+            <view class="card-head">
+                <text class="card-title">花销记录</text>
+                <text class="link" bindtap="openExpenseForm">＋ 记一笔</text>
+            </view>
+            <view class="empty" wx:if="{{expenseList.length === 0}}">还没有花销，今天轻装上阵。</view>
+            <view class="list-item" wx:for="{{expenseList}}" wx:key="id">
+                <view class="item-main">
+                    <text class="item-title">{{item.name}}</text>
+                    <text class="muted item-sub">{{item.category}} · {{item.dateLabel}}</text>
+                </view>
+                <text class="item-amount">{{item.amountText}}</text>
+            </view>
+        </view>
+    </block>
+
+    <block wx:if="{{tab === 'fixed'}}">
+        <view class="card">
+            <view class="card-head">
+                <text class="card-title">固定负担</text>
+                <text class="link" bindtap="openFixedForm">＋ 添加</text>
+            </view>
+            <view class="empty" wx:if="{{fixedList.length === 0}}">房租、会员这类每月固定的开销，加起来更清楚。</view>
+            <view class="list-item" wx:for="{{fixedList}}" wx:key="id">
+                <view class="item-main">
+                    <text class="item-title">{{item.name}}{{item.active ? '' : '（已停止）'}}</text>
+                    <text class="muted item-sub">{{item.periodLabel}} · {{item.fromLabel}}</text>
+                </view>
+                <view class="item-right">
+                    <text class="item-amount">{{item.amountText}}</text>
+                    <text class="stop-link" wx:if="{{item.active}}" data-id="{{item.id}}" catchtap="handleStopFixed">停止</text>
+                </view>
+            </view>
+            <text class="muted foot-note">周期费用按考勤工作日分摊；每日费用按你选的重复方式计入当天。</text>
+        </view>
+    </block>
+
+    <block wx:if="{{tab === 'income'}}">
+        <view class="card">
+            <view class="card-head">
+                <text class="card-title">意外之财</text>
+                <text class="link" bindtap="openIncomeForm">＋ 记一笔</text>
+            </view>
+            <view class="empty" wx:if="{{incomeList.length === 0}}">红包、补贴、奖金，都算今天的额外收获。</view>
+            <view class="list-item" wx:for="{{incomeList}}" wx:key="id">
+                <view class="item-main">
+                    <text class="item-title {{item.voided ? 'voided' : ''}}">{{item.category}}{{item.voided ? '（已作废）' : ''}}</text>
+                    <text class="muted item-sub">{{item.dateLabel}}{{item.note !== '' ? ' · ' + item.note : ''}}</text>
+                </view>
+                <view class="item-right">
+                    <text class="item-amount">{{item.amountText}}</text>
+                    <text class="stop-link" data-id="{{item.id}}" data-voided="{{item.voided}}" catchtap="toggleIncome">{{item.voided ? '恢复' : '作废'}}</text>
+                </view>
+            </view>
+            <text class="muted foot-note">意外之财归属于所选日期，不制造工时。</text>
+        </view>
+    </block>
+</view>
+
+<view class="mask" wx:if="{{showExpenseForm}}" bindtap="closeExpenseForm"></view>
+<view class="sheet" wx:if="{{showExpenseForm}}">
+    <text class="sheet-title">记一笔花销</text>
+    <view class="field">
+        <text class="field-label">分类</text>
+        <view class="chip-row">
+            <view class="chip {{expenseCategory === item ? 'chip-active' : ''}}" wx:for="{{expenseCategories}}" wx:key="*this" data-name="{{item}}" bindtap="handleExpenseCategory">{{item}}</view>
+        </view>
+    </view>
+    <view class="field">
+        <text class="field-label">名称</text>
+        <input class="field-input" maxlength="40" placeholder="例如 楼下便利店" value="{{expenseName}}" bindinput="handleExpenseName" />
+    </view>
+    <view class="field">
+        <text class="field-label">金额（元）</text>
+        <input class="field-input" type="digit" placeholder="例如 18.50" value="{{expenseAmount}}" bindinput="handleExpenseAmount" />
+    </view>
+    <view class="field">
+        <text class="field-label">这笔算哪儿</text>
+        <view class="chip-row">
+            <view class="chip {{expenseScope === 'day' ? 'chip-active' : ''}}" data-scope="day" bindtap="handleExpenseScope">当日</view>
+            <view class="chip {{expenseScope === 'month' ? 'chip-active' : ''}}" data-scope="month" bindtap="handleExpenseScope">整月 · 按考勤工作日分摊</view>
+        </view>
+    </view>
+    <view class="field" wx:if="{{expenseScope === 'month'}}">
+        <text class="field-label">归属月份</text>
+        <picker mode="date" fields="month" value="{{expenseMonth}}" bindchange="handleExpenseMonth">
+            <view class="field-input picker-value">{{expenseMonth}}</view>
+        </picker>
+        <text class="muted foot-note">整月花销只计入已过去的工作日，不延续到下个月。</text>
+    </view>
+    <text class="error-text" wx:if="{{expenseError !== ''}}">{{expenseError}}</text>
+    <view class="sheet-actions">
+        <button class="sheet-button quiet" bindtap="closeExpenseForm">取消</button>
+        <button class="sheet-button primary" bindtap="saveExpense">保存花销</button>
+    </view>
+</view>
+
+<view class="mask" wx:if="{{showFixedForm}}" bindtap="closeFixedForm"></view>
+<view class="sheet" wx:if="{{showFixedForm}}">
+    <text class="sheet-title">添加固定负担</text>
+    <view class="field">
+        <text class="field-label">名称</text>
+        <input class="field-input" maxlength="40" placeholder="例如 房租" value="{{fixedName}}" bindinput="handleFixedName" />
+    </view>
+    <view class="field">
+        <text class="field-label">金额（元）</text>
+        <input class="field-input" type="digit" placeholder="例如 3500.00" value="{{fixedAmount}}" bindinput="handleFixedAmount" />
+    </view>
+    <view class="field">
+        <text class="field-label">计费方式</text>
+        <view class="chip-row">
+            <view class="chip {{fixedPeriod === item.key ? 'chip-active' : ''}}" wx:for="{{fixedPeriods}}" wx:key="key" data-key="{{item.key}}" bindtap="handleFixedPeriod">{{item.label}}</view>
+        </view>
+    </view>
+    <view class="field" wx:if="{{fixedPeriod === 'day'}}">
+        <text class="field-label">重复日期</text>
+        <view class="chip-row">
+            <view class="chip {{fixedRepeat === item.key ? 'chip-active' : ''}}" wx:for="{{fixedRepeats}}" wx:key="key" data-key="{{item.key}}" bindtap="handleFixedRepeat">{{item.label}}</view>
+        </view>
+    </view>
+    <text class="muted foot-note">周期费用按工作日分摊到每天；每日费用从今天开始重复计入。</text>
+    <text class="error-text" wx:if="{{fixedError !== ''}}">{{fixedError}}</text>
+    <view class="sheet-actions">
+        <button class="sheet-button quiet" bindtap="closeFixedForm">取消</button>
+        <button class="sheet-button primary" bindtap="saveFixed">保存</button>
+    </view>
+</view>
+
+<view class="mask" wx:if="{{showIncomeForm}}" bindtap="closeIncomeForm"></view>
+<view class="sheet" wx:if="{{showIncomeForm}}">
+    <text class="sheet-title">记录意外之财</text>
+    <view class="field">
+        <text class="field-label">来源</text>
+        <view class="chip-row">
+            <view class="chip {{incomeCategory === item ? 'chip-active' : ''}}" wx:for="{{incomeCategories}}" wx:key="*this" data-name="{{item}}" bindtap="handleIncomeCategory">{{item}}</view>
+        </view>
+    </view>
+    <view class="field">
+        <text class="field-label">金额（元）</text>
+        <input class="field-input" type="digit" placeholder="例如 88.00" value="{{incomeAmount}}" bindinput="handleIncomeAmount" />
+    </view>
+    <view class="field">
+        <text class="field-label">这笔算哪一天</text>
+        <picker mode="date" value="{{incomeDate}}" end="{{todayKey}}" bindchange="handleIncomeDate">
+            <view class="field-input picker-value">{{incomeDate}}</view>
+        </picker>
+    </view>
+    <view class="field">
+        <text class="field-label">备注（选填）</text>
+        <input class="field-input" maxlength="120" placeholder="例如 节日红包" value="{{incomeNote}}" bindinput="handleIncomeNote" />
+    </view>
+    <text class="error-text" wx:if="{{incomeError !== ''}}">{{incomeError}}</text>
+    <view class="sheet-actions">
+        <button class="sheet-button quiet" bindtap="closeIncomeForm">取消</button>
+        <button class="sheet-button primary" bindtap="saveIncome">保存收入</button>
+    </view>
+</view>

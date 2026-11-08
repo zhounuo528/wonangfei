@@ -1,0 +1,187 @@
+.cal-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8rpx 4rpx 24rpx;
+}
+
+.month-nav {
+    width: 72rpx;
+    height: 72rpx;
+    border-radius: 50%;
+    background: #ffffff;
+    color: #3c424b;
+    font-size: 40rpx;
+    line-height: 68rpx;
+    text-align: center;
+}
+
+.month-center {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.month-label {
+    font-size: 34rpx;
+    font-weight: 600;
+}
+
+.month-link {
+    margin-top: 4rpx;
+    font-size: 22rpx;
+}
+
+.weekday-row {
+    display: flex;
+    padding-bottom: 12rpx;
+}
+
+.weekday {
+    width: 14.28%;
+    color: #9aa1ab;
+    font-size: 22rpx;
+    text-align: center;
+}
+
+.grid {
+    display: flex;
+    flex-wrap: wrap;
+}
+
+.cell {
+    box-sizing: border-box;
+    width: 14.28%;
+    height: 92rpx;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    border: 2rpx solid transparent;
+    border-radius: 14rpx;
+}
+
+.cell-blank {
+    background: transparent;
+}
+
+.tone-work {
+    background: #f1faf6;
+}
+
+.tone-rest {
+    background: #f5f6f8;
+}
+
+.tone-leave {
+    background: #f4f1fc;
+}
+
+.tone-swap {
+    background: #eef4fd;
+}
+
+.tone-overtime {
+    background: #fdf4ec;
+}
+
+.cell-today .cell-day {
+    color: #0f9d76;
+    font-weight: 600;
+}
+
+.cell-selected {
+    border-color: #0f9d76;
+}
+
+.cell-day {
+    color: #2b3038;
+    font-size: 24rpx;
+}
+
+.cell-net {
+    margin-top: 2rpx;
+    color: #5c636e;
+    font-size: 18rpx;
+}
+
+.cell-dot {
+    margin-top: 2rpx;
+    color: #c2c7ce;
+    font-size: 18rpx;
+}
+
+.legend {
+    display: flex;
+    flex-wrap: wrap;
+    margin-top: 20rpx;
+    padding-top: 16rpx;
+    border-top: 1rpx solid #f1f3f5;
+}
+
+.legend-item {
+    display: flex;
+    align-items: center;
+    margin: 6rpx 24rpx 6rpx 0;
+}
+
+.legend-dot {
+    width: 18rpx;
+    height: 18rpx;
+    margin-right: 10rpx;
+    border-radius: 6rpx;
+}
+
+.sum-item {
+    display: flex;
+    flex-direction: column;
+}
+
+.sum-value {
+    margin-top: 4rpx;
+    font-size: 28rpx;
+    font-weight: 600;
+}
+
+.detail-plan {
+    display: block;
+    margin-top: 6rpx;
+    font-size: 22rpx;
+}
+
+.time-row {
+    display: flex;
+    margin-top: 8rpx;
+}
+
+.time-item {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+}
+
+.time-value {
+    margin-top: 4rpx;
+    font-size: 30rpx;
+    font-weight: 600;
+}
+
+.detail-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10rpx 0;
+}
+
+.detail-value {
+    font-size: 26rpx;
+}
+
+.detail-note {
+    display: block;
+    margin-top: 16rpx;
+    padding-top: 16rpx;
+    border-top: 1rpx solid #f3f5f7;
+    font-size: 22rpx;
+    line-height: 1.6;
+}

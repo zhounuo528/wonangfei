@@ -1,0 +1,73 @@
+<view class="page">
+    <view class="tabs">
+        <view class="tab {{mode === 'month' ? 'tab-active' : ''}}" data-mode="month" bindtap="switchMode">月报</view>
+        <view class="tab {{mode === 'week' ? 'tab-active' : ''}}" data-mode="week" bindtap="switchMode">周报</view>
+    </view>
+
+    <view class="period-bar">
+        <view class="period-nav" bindtap="prevPeriod">‹</view>
+        <picker wx:if="{{mode === 'month'}}" mode="date" fields="month" value="{{month}}" bindchange="handleMonth">
+            <text class="period-label">{{view ? view.title : month}}</text>
+        </picker>
+        <picker wx:else mode="date" value="{{weekDate}}" bindchange="handleWeekDate">
+            <text class="period-label">{{view ? view.title : weekDate}}</text>
+        </picker>
+        <view class="period-nav" bindtap="nextPeriod">›</view>
+    </view>
+
+    <text class="error-text" wx:if="{{error !== ''}}">{{error}}</text>
+    <view class="card empty" wx:if="{{empty && error === ''}}">这段时间还没有记录。先开始上班，数字才有得看。</view>
+
+    <block wx:if="{{view && !empty}}">
+        <view class="card">
+            <view class="card-head">
+                <text class="card-title">总收入</text>
+                <text class="pill" wx:if="{{view.provisional}}">进行中</text>
+            </view>
+            <text class="big-amount {{view.netNegative ? 'negative' : ''}}">{{view.earned}}</text>
+            <text class="muted">工资与加班费 {{view.wage}} · 意外之财 {{view.extra}}</text>
+            <view class="divider"></view>
+            <view class="row-between">
+                <view><text class="muted">上班成本</text><text class="row-value">{{view.costs}}</text></view>
+                <view class="align-right"><text class="muted">净利润</text><text class="row-value {{view.netNegative ? 'negative' : ''}}">{{view.net}}</text></view>
+            </view>
+        </view>
+
+        <view class="card">
+            <view class="card-head"><text class="card-title">时间</text></view>
+            <view class="grid2">
+                <view class="cell2"><text class="muted">上班总时长</text><text class="row-value">{{view.worked}}</text></view>
+                <view class="cell2"><text class="muted">实际有效工作</text><text class="row-value">{{view.actual}}</text></view>
+                <view class="cell2"><text class="muted">摸鱼总时长</text><text class="row-value">{{view.fish}}</text></view>
+                <view class="cell2"><text class="muted">加班总时长</text><text class="row-value">{{view.overtime}}</text></view>
+            </view>
+            <text class="muted foot-note">摸鱼也算一种本事，按工资毛收入估算约 {{view.fishEarned}}。</text>
+        </view>
+
+        <view class="card">
+            <view class="card-head"><text class="card-title">平均价格</text></view>
+            <view class="grid2">
+                <view class="cell2"><text class="muted">净平均日薪</text><text class="row-value">{{view.daily}}</text></view>
+                <view class="cell2"><text class="muted">净平均时薪</text><text class="row-value">{{view.hourly}}</text></view>
+                <view class="cell2"><text class="muted">净平均秒薪</text><text class="row-value">{{view.secondly}}</text></view>
+                <view class="cell2"><text class="muted">有工时天数</text><text class="row-value">{{view.workedDays}}</text></view>
+            </view>
+        </view>
+
+        <view class="card">
+            <view class="card-head"><text class="card-title">出勤</text></view>
+            <view class="grid2">
+                <view class="cell2"><text class="muted">准时</text><text class="row-value">{{view.ontimeDays}}</text></view>
+                <view class="cell2"><text class="muted">加班</text><text class="row-value">{{view.lateDays}}</text></view>
+                <view class="cell2"><text class="muted">提前</text><text class="row-value">{{view.earlyDays}}</text></view>
+                <view class="cell2"><text class="muted">请假 / 调休</text><text class="row-value">{{view.leaveDays}} / {{view.swapDays}}</text></view>
+            </view>
+        </view>
+
+        <view class="card" wx:if="{{view.compareRange !== ''}}">
+            <view class="card-head"><text class="card-title">加班前后，时间的价格</text></view>
+            <text class="muted">{{view.compareRange}}</text>
+            <text class="muted foot-note">同一期间去掉加班之后的假设对比，用来看看加班到底值不值。</text>
+        </view>
+    </block>
+</view>
