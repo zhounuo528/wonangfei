@@ -48,6 +48,26 @@ globalThis.Page = definition => {
     lastPageDefinition = definition;
 };
 
+// 小程序 setData 支持 'list[0].field' 这样的路径写法，桩实现必须一并支持，
+// 否则用路径更新的页面在这里会「看起来没生效」。
+function assignPath(target, path, value) {
+    const tokens = [];
+    const pattern = /([^.[\]]+)|\[(\d+)\]/g;
+    let match;
+    while ((match = pattern.exec(path)) !== null) {
+        tokens.push(match[2] !== undefined ? Number(match[2]) : match[1]);
+    }
+    let cursor = target;
+    for (let i = 0; i < tokens.length - 1; i += 1) {
+        const token = tokens[i];
+        if (cursor[token] === undefined || cursor[token] === null) {
+            cursor[token] = typeof tokens[i + 1] === 'number' ? [] : {};
+        }
+        cursor = cursor[token];
+    }
+    cursor[tokens[tokens.length - 1]] = value;
+}
+
 function instantiate(definition) {
     const instance = Object.create(null);
     Object.keys(definition).forEach(key => {
@@ -56,7 +76,7 @@ function instantiate(definition) {
     instance.data = JSON.parse(JSON.stringify(definition.data || {}));
     instance.setData = function setData(patch, callback) {
         Object.keys(patch).forEach(key => {
-            this.data[key] = patch[key];
+            assignPath(this.data, key, patch[key]);
         });
         if (typeof callback === 'function') {
             callback();
@@ -248,6 +268,56 @@ guardPage.onShow();
 guardPage.handleKind({ currentTarget: { dataset: { key: 'overtime' } } });
 guardPage.save();
 check('基础工作日不允许改成休息日加班', guardPage.data.error !== '', guardPage.data.error);
+
+// 9) 当日花销编辑：先造一笔整月分摊，验证单日编辑只动当天
+costsPage.openExpenseForm();
+costsPage.handleExpenseScope({ currentTarget: { dataset: { scope: 'month' } } });
+costsPage.handleExpenseMonth({ detail: { value: todayKeyValue.slice(0, 7) } });
+costsPage.handleExpenseName({ detail: { value: '整月餐补' } });
+costsPage.handleExpenseAmount({ detail: { value: '300' } });
+costsPage.saveExpense();
+check('整月分摊花销保存成功', costsPage.data.expenseError === '', costsPage.data.expenseError);
+
+const dayScopeExpenses = () => store.getState().expenses.filter(item => item.scope !== 'month' && item.date === todayKeyValue);
+
+const expenseDayPage = await loadPage('day');
+expenseDayPage.onLoad({ date: todayKeyValue });
+expenseDayPage.onShow();
+check('单日页读到当日花销', expenseDayPage.data.expenseRows.length === 1, expenseDayPage.data.expenseRows.length);
+check('整月分摊在单日页只读展示', expenseDayPage.data.monthItems.length === 1, expenseDayPage.data.monthItems.length);
+
+const firstExpenseId = expenseDayPage.data.expenseRows[0].id;
+expenseDayPage.handleExpenseAmount({ currentTarget: { dataset: { index: 0 } }, detail: { value: '18.5' } });
+expenseDayPage.save();
+const edited = dayScopeExpenses();
+check('改金额后仍是一笔且 ID 不变', edited.length === 1 && edited[0].id === firstExpenseId, JSON.stringify(edited.map(item => item.id)));
+check('金额已更新为 18.5', edited[0].amount === 18.5, edited[0].amount);
+
+expenseDayPage.onShow();
+expenseDayPage.addExpenseRow();
+expenseDayPage.handleExpenseName({ currentTarget: { dataset: { index: 1 } }, detail: { value: '咖啡' } });
+expenseDayPage.handleExpenseAmount({ currentTarget: { dataset: { index: 1 } }, detail: { value: '12' } });
+expenseDayPage.save();
+check('可以给当天加一笔花销', dayScopeExpenses().length === 2, expenseDayPage.data.error);
+
+expenseDayPage.onShow();
+check('新增的花销会回显在列表', expenseDayPage.data.expenseRows.length === 2, expenseDayPage.data.expenseRows.length);
+expenseDayPage.removeExpenseRow({ currentTarget: { dataset: { index: 0 } } });
+expenseDayPage.save();
+const remaining = dayScopeExpenses();
+check('删掉一行即删除那笔花销', remaining.length === 1 && remaining[0].name === '咖啡', JSON.stringify(remaining.map(item => item.name)));
+
+check('整月分摊没有被单日编辑覆盖', store.getState().expenses.filter(item => item.scope === 'month').length === 1);
+const monthPortion = store.getState().expenses
+    .filter(item => item.scope === 'month')
+    .reduce((sum, item) => sum + (item.allocationDates.includes(todayKeyValue) ? item.amount / item.allocationDates.length : 0), 0);
+const statsAfterExpense = core.dayStats(store.getState(), todayKeyValue, Date.now());
+check('当天花销合计随编辑变化（12 + 整月分摊）', Math.abs(statsAfterExpense.expenses - (12 + monthPortion)) < 1e-9, statsAfterExpense.expenses);
+
+expenseDayPage.onShow();
+expenseDayPage.removeExpenseRow({ currentTarget: { dataset: { index: 0 } } });
+expenseDayPage.save();
+check('清空当日花销后为 0 笔', dayScopeExpenses().length === 0, dayScopeExpenses().length);
 
 const failed = checks.filter(item => !item.ok);
 [todayPage, todayPage2].forEach(page => {

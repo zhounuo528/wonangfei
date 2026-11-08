@@ -70,6 +70,63 @@
     margin-top: 8rpx;
 }
 
+.expense-row {
+    display: flex;
+    align-items: center;
+    margin-bottom: 16rpx;
+}
+
+.expense-name {
+    flex: 1;
+    box-sizing: border-box;
+    padding: 16rpx 20rpx;
+    border: 1rpx solid #dfe3e8;
+    border-radius: 12rpx;
+    background: #fbfcfd;
+    font-size: 26rpx;
+}
+
+.expense-amount {
+    box-sizing: border-box;
+    width: 180rpx;
+    margin-left: 12rpx;
+    padding: 16rpx 20rpx;
+    border: 1rpx solid #dfe3e8;
+    border-radius: 12rpx;
+    background: #fbfcfd;
+    font-size: 26rpx;
+    text-align: right;
+}
+
+.expense-remove {
+    margin-left: 16rpx;
+    color: #d4380d;
+    font-size: 24rpx;
+}
+
+.add-row {
+    margin-top: 4rpx;
+    font-size: 26rpx;
+}
+
+.empty-row {
+    display: block;
+    padding: 12rpx 0 20rpx;
+    font-size: 24rpx;
+}
+
+.month-block {
+    margin-top: 12rpx;
+    padding-top: 16rpx;
+    border-top: 1rpx solid #f3f5f7;
+}
+
+.month-title {
+    display: block;
+    margin-bottom: 8rpx;
+    font-size: 22rpx;
+}
+
 .item-title {
     font-size: 26rpx;
 }

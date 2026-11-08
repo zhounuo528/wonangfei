@@ -6,7 +6,7 @@ import {
     undoableCalendarChange,
     undoCalendarChange,
 } from '../../core/calendar.js';
-import { dateKey, isWorkday } from '../../core/model.js';
+import { dateKey, isWorkday, monthKey } from '../../core/model.js';
 import { formatCurrency } from '../../core/money.js';
 import { dateText, weekdayLabel, todayKey } from '../../utils/format.js';
 
@@ -48,6 +48,11 @@ Page({
         fixedAmountText: '0.00',
         fixedSourceText: '',
         fixedUnallocatable: false,
+        hasDayEntry: false,
+        canEditExpenses: false,
+        expenseRows: [],
+        expenseTotalText: '0.00',
+        monthItems: [],
         needBackfillConfirm: false,
         backfillConfirmed: false,
         canUndo: false,
@@ -84,6 +89,11 @@ Page({
         const showFixed = !info.future && !!day && !quote.unallocatable ? true : (!info.future && !!day);
         const undo = undoableCalendarChange(state, key);
 
+        const dayExpenses = state.expenses.filter(expense => expense.scope !== 'month' && expense.date === key);
+        const month = monthKey(key);
+        const monthExpenses = state.expenses.filter(expense => expense.scope === 'month' && expense.month === month);
+        const expenseTotal = dayExpenses.reduce((sum, expense) => sum + expense.amount, 0);
+
         this.setData({
             dateLabel: dateText(key),
             weekday: weekdayLabel(key),
@@ -109,6 +119,20 @@ Page({
                     ? '按当天原有的分摊计算'
                     : '按当前固定项目补计此日',
             fixedUnallocatable: !!quote.unallocatable,
+            hasDayEntry: !!day,
+            canEditExpenses: !!day && !info.future,
+            expenseRows: dayExpenses.map(expense => ({
+                rowKey: expense.id,
+                id: expense.id,
+                name: expense.name,
+                amount: String(expense.amount),
+            })),
+            expenseTotalText: formatCurrency(expenseTotal),
+            monthItems: monthExpenses.map(expense => ({
+                id: expense.id,
+                name: expense.name,
+                amountText: formatCurrency(expense.amount),
+            })),
             needBackfillConfirm: !hasRecord && key < today,
             canUndo: !!undo,
             error: '',
@@ -159,6 +183,37 @@ Page({
         this.setData({ backfillConfirmed: event.detail.value, error: '' });
     },
 
+    handleExpenseName(event) {
+        const index = Number(event.currentTarget.dataset.index);
+        const patch = { error: '' };
+        patch['expenseRows[' + index + '].name'] = event.detail.value;
+        this.setData(patch);
+    },
+
+    handleExpenseAmount(event) {
+        const index = Number(event.currentTarget.dataset.index);
+        const patch = { error: '' };
+        patch['expenseRows[' + index + '].amount'] = event.detail.value;
+        this.setData(patch);
+    },
+
+    addExpenseRow() {
+        const rows = this.data.expenseRows.concat([{
+            rowKey: 'new-' + String(Date.now()) + '-' + String(this.data.expenseRows.length),
+            id: '',
+            name: '',
+            amount: '',
+        }]);
+        this.setData({ expenseRows: rows, error: '' });
+    },
+
+    removeExpenseRow(event) {
+        const index = Number(event.currentTarget.dataset.index);
+        const rows = this.data.expenseRows.slice();
+        rows.splice(index, 1);
+        this.setData({ expenseRows: rows, error: '' });
+    },
+
     save() {
         const key = this.data.date;
         const input = {
@@ -187,6 +242,33 @@ Page({
 
         if (this.data.showFixed) {
             input.fixedBurden = { enabled: this.data.fixedEnabled };
+        }
+
+        if (this.data.canEditExpenses) {
+            const rows = this.data.expenseRows;
+            const expenses = [];
+            for (let i = 0; i < rows.length; i += 1) {
+                const name = String(rows[i].name || '').trim();
+                const amountText = String(rows[i].amount || '').trim();
+                if (name === '' && amountText === '') {
+                    continue;
+                }
+                if (name === '') {
+                    this.setData({ error: '第 ' + (i + 1) + ' 笔花销还差个名称' });
+                    return;
+                }
+                const amount = Number(amountText);
+                if (!Number.isFinite(amount) || amount <= 0 || amount > 1e9) {
+                    this.setData({ error: '第 ' + (i + 1) + ' 笔花销金额需大于 0、至多 10 亿' });
+                    return;
+                }
+                const row = { name, amount: Math.round(amount * 100) / 100 };
+                if (rows[i].id) {
+                    row.id = rows[i].id;
+                }
+                expenses.push(row);
+            }
+            input.expenses = expenses;
         }
 
         const result = apply(state => editCalendarDay(state, input, Date.now()));

@@ -52,6 +52,37 @@
         </view>
     </view>
 
+    <view class="card" wx:if="{{canEditExpenses}}">
+        <view class="card-head">
+            <text class="card-title">当日花销</text>
+            <text class="muted">合计 {{expenseTotalText}}</text>
+        </view>
+        <text class="muted empty-row" wx:if="{{expenseRows.length === 0}}">这一天还没有临时花销。</text>
+        <view class="expense-row" wx:for="{{expenseRows}}" wx:key="rowKey">
+            <input class="expense-name" value="{{item.name}}" placeholder="名称" maxlength="40" data-index="{{index}}" bindinput="handleExpenseName" />
+            <input class="expense-amount" type="digit" value="{{item.amount}}" placeholder="金额" data-index="{{index}}" bindinput="handleExpenseAmount" />
+            <text class="expense-remove" data-index="{{index}}" bindtap="removeExpenseRow">删除</text>
+        </view>
+        <button class="quiet add-row" bindtap="addExpenseRow">＋ 加一笔</button>
+
+        <view class="month-block" wx:if="{{monthItems.length > 0}}">
+            <text class="muted month-title">整月分摊（只读，去账本修改）</text>
+            <view class="list-item" wx:for="{{monthItems}}" wx:key="id">
+                <text class="item-title">{{item.name}}</text>
+                <text class="item-amount">{{item.amountText}}</text>
+            </view>
+        </view>
+
+        <text class="muted hint">保存后这一天的花销会整体替换，其他日期和整月分摊不受影响；删掉一行就等于删除那笔花销。</text>
+    </view>
+
+    <view class="card" wx:elif="{{!future && !hasDayEntry}}">
+        <view class="card-head">
+            <text class="card-title">当日花销</text>
+        </view>
+        <text class="muted hint">这天还没有考勤记录，暂时不能在这里改花销。请到账本页直接记一笔。</text>
+    </view>
+
     <view class="card" wx:if="{{showFixed}}">
         <view class="card-head">
             <text class="card-title">固定负担</text>
