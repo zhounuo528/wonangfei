@@ -71,5 +71,7 @@
         </block>
 
         <text class="muted detail-note" wx:if="{{detail.note !== ''}}">{{detail.note}}</text>
+
+        <button class="quiet edit-day" data-key="{{detail.key}}" bindtap="goDayEdit">修改这一天的安排</button>
     </view>
 </view>

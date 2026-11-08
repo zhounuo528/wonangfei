@@ -185,3 +185,8 @@
     font-size: 22rpx;
     line-height: 1.6;
 }
+
+.edit-day {
+    margin-top: 20rpx;
+    font-size: 26rpx;
+}

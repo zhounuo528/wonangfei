@@ -1,0 +1,101 @@
+<view class="page">
+    <view class="day-head">
+        <view>
+            <text class="eyebrow">{{future ? '计划安排' : (isToday ? '今天' : '已过去的日期')}}</text>
+            <text class="day-title">{{dateLabel}} · {{weekday}}</text>
+        </view>
+        <text class="pill {{hasRecord ? 'pill-working' : ''}}">{{hasRecord ? '有工时记录' : '无工时记录'}}</text>
+    </view>
+
+    <view class="card">
+        <view class="card-head">
+            <text class="card-title">这一天算什么</text>
+        </view>
+        <view class="chip-row">
+            <view
+                class="chip {{kind === item.key ? 'chip-active' : ''}}"
+                wx:for="{{kinds}}"
+                wx:key="key"
+                data-key="{{item.key}}"
+                bindtap="handleKind"
+            >{{item.label}}</view>
+        </view>
+        <text class="muted hint">{{kindHint}}</text>
+        <text class="muted hint" wx:if="{{kind === 'overtime' && baseWorkday}}">这天本来是工作日，加班一般用实际上班时间记录；改成「休息日加班」会被拒绝保存。</text>
+    </view>
+
+    <view class="card">
+        <view class="card-head">
+            <text class="card-title">工资怎么算</text>
+        </view>
+        <view class="chip-row">
+            <view
+                class="chip {{payMode === item.key ? 'chip-active' : ''}}"
+                wx:for="{{payModes}}"
+                wx:key="key"
+                data-key="{{item.key}}"
+                bindtap="handlePayMode"
+            >{{item.label}}</view>
+        </view>
+        <view class="field" wx:if="{{payMode === 'custom'}}">
+            <text class="field-label">这一天的补薪金额（元）</text>
+            <input class="field-input" type="digit" placeholder="例如 200.00" value="{{amount}}" bindinput="handleAmount" />
+        </view>
+        <text class="muted hint">「按标准日工资」用月薪除以本月计薪天数；改动只影响这一天，其他日期和月薪不变。</text>
+
+        <view class="switch-row" wx:if="{{hasOvertimePay}}">
+            <view class="switch-copy">
+                <text class="switch-label">保留已记加班费</text>
+                <text class="muted switch-hint">这天已记 {{overtimeText}} 加班费，关闭后不计入当天收入。</text>
+            </view>
+            <switch checked="{{includeOvertimePay}}" color="#0f9d76" bindchange="handleOvertimePay" />
+        </view>
+    </view>
+
+    <view class="card" wx:if="{{showFixed}}">
+        <view class="card-head">
+            <text class="card-title">固定负担</text>
+            <text class="muted">{{fixedSourceText}}</text>
+        </view>
+        <view class="switch-row">
+            <view class="switch-copy">
+                <text class="switch-label">这一天计入固定负担</text>
+                <text class="muted switch-hint">关闭只排除这一天，项目本身和其他日期不受影响。</text>
+            </view>
+            <switch checked="{{fixedEnabled}}" color="#0f9d76" disabled="{{fixedUnallocatable}}" bindchange="handleFixed" />
+        </view>
+        <view class="fixed-row" wx:if="{{fixedEnabled && fixedItems.length > 0}}">
+            <view class="list-item" wx:for="{{fixedItems}}" wx:key="id">
+                <text class="item-title">{{item.name}}</text>
+                <text class="item-amount">{{item.amountText}}</text>
+            </view>
+            <view class="row-between fixed-total">
+                <text class="muted">当日合计</text>
+                <text class="strong">{{fixedAmountText}}</text>
+            </view>
+        </view>
+        <text class="muted hint" wx:if="{{fixedUnallocatable}}">这个月考勤工作日为 0，无法折算固定负担，请先去设置里核对考勤。</text>
+    </view>
+
+    <view class="card" wx:if="{{needBackfillConfirm}}">
+        <view class="card-head">
+            <text class="card-title">补录确认</text>
+        </view>
+        <text class="muted hint">这天是空白的历史日期，没有当时的薪资和工时快照。确认后会按当前设置生成这一天的记录（不含工时）。</text>
+        <view class="confirm-row" bindtap="handleBackfillConfirm" data-value="{{!backfillConfirmed}}">
+            <view class="checkbox {{backfillConfirmed ? 'checkbox-on' : ''}}">{{backfillConfirmed ? '✓' : ''}}</view>
+            <text class="confirm-text">我已核对，确认补录这一天</text>
+        </view>
+    </view>
+
+    <text class="error-text" wx:if="{{error !== ''}}">{{error}}</text>
+
+    <button class="primary" bindtap="save">保存这一天的安排</button>
+
+    <view class="secondary-actions">
+        <button class="quiet action" wx:if="{{canUndo}}" bindtap="undo">撤销上一次修改</button>
+        <button class="quiet action" wx:if="{{future}}" bindtap="clearPlan">清除这天的计划</button>
+    </view>
+
+    <text class="muted foot-note">这里只调整这一天的类型与固定负担，不改花销、不改上下班时段。改时段请在工作台用时间修正；补记实际工时不在这里做。</text>
+</view>

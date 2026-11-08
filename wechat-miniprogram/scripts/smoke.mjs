@@ -24,6 +24,7 @@ globalThis.wx = {
         }
     },
     navigateTo: () => {},
+    navigateBack: () => {},
     switchTab: () => {},
     redirectTo: () => {},
     setClipboardData: options => {
@@ -197,6 +198,56 @@ const stateNow = store.getState();
 const todayKey = core.dateKey(new Date());
 const sessions = (stateNow.days[todayKey] && stateNow.days[todayKey].sessions) || [];
 check('重复开始上班不会叠加班次', sessions.length <= 2, sessions.length);
+
+// 8) 日历单日修改（精简版）：改当天类型 + 是否计入固定负担 + 撤销
+const todayKeyValue = core.dateKey(new Date());
+const dayPage = await loadPage('day');
+dayPage.onLoad({ date: todayKeyValue });
+dayPage.onShow();
+check('单日页读到现在是上班类型', dayPage.data.kind === 'work', dayPage.data.kind);
+check('有工时记录的日期显示固定负担开关', dayPage.data.showFixed === true);
+
+dayPage.handleKind({ currentTarget: { dataset: { key: 'leave' } } });
+dayPage.handlePayMode({ currentTarget: { dataset: { key: 'unpaid' } } });
+dayPage.save();
+check('改为请假保存成功', dayPage.data.error === '', dayPage.data.error);
+
+const leaveCalendar = store.getState().days[todayKeyValue].calendar;
+check('当天写入请假策略', !!leaveCalendar && leaveCalendar.kind === 'leave', leaveCalendar && leaveCalendar.kind);
+check('请假当天不再计工时工资', core.dayStats(store.getState(), todayKeyValue, Date.now()).baseEarned === 0);
+
+dayPage.undo();
+const restoredCalendar = store.getState().days[todayKeyValue].calendar;
+check('撤销后恢复原来的安排', !restoredCalendar || restoredCalendar.kind === 'work', restoredCalendar && restoredCalendar.kind);
+
+dayPage.onShow();
+dayPage.handleFixed({ detail: { value: false } });
+dayPage.save();
+check('可以只排除这一天的固定负担', store.getState().days[todayKeyValue].fixedBurden.enabled === false, dayPage.data.error);
+check('排除后当天固定负担为 0', core.dayStats(store.getState(), todayKeyValue, Date.now()).fixed === 0);
+
+// 未来日期只安排计划，不能提前记工时
+const tomorrow = new Date();
+tomorrow.setDate(tomorrow.getDate() + 1);
+const tomorrowKey = core.dateKey(tomorrow);
+const futurePage = await loadPage('day');
+futurePage.onLoad({ date: tomorrowKey });
+futurePage.onShow();
+check('未来日期标记为计划', futurePage.data.future === true);
+check('未来日期不显示固定负担开关', futurePage.data.showFixed === false);
+futurePage.handleKind({ currentTarget: { dataset: { key: 'leave' } } });
+futurePage.save();
+check('未来可以安排请假计划', !!(store.getState().dayPlans && store.getState().dayPlans[tomorrowKey]) && store.getState().dayPlans[tomorrowKey].kind === 'leave', futurePage.data.error);
+futurePage.clearPlan();
+check('未来计划可以清除', !(store.getState().dayPlans && store.getState().dayPlans[tomorrowKey]));
+
+// 工作日改成休息日加班应被拒绝
+const guardPage = await loadPage('day');
+guardPage.onLoad({ date: todayKeyValue });
+guardPage.onShow();
+guardPage.handleKind({ currentTarget: { dataset: { key: 'overtime' } } });
+guardPage.save();
+check('基础工作日不允许改成休息日加班', guardPage.data.error !== '', guardPage.data.error);
 
 const failed = checks.filter(item => !item.ok);
 [todayPage, todayPage2].forEach(page => {

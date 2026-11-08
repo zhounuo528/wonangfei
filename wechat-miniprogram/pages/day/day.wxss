@@ -1,0 +1,133 @@
+.day-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    padding: 8rpx 4rpx 24rpx;
+}
+
+.day-title {
+    display: block;
+    margin-top: 6rpx;
+    font-size: 40rpx;
+    font-weight: 600;
+}
+
+.chip-row {
+    display: flex;
+    flex-wrap: wrap;
+}
+
+.chip {
+    margin: 0 16rpx 16rpx 0;
+    padding: 14rpx 26rpx;
+    border: 1rpx solid #dfe3e8;
+    border-radius: 999rpx;
+    color: #5c636e;
+    font-size: 26rpx;
+}
+
+.chip-active {
+    border-color: #0f9d76;
+    background: #e8f7f2;
+    color: #0f9d76;
+    font-weight: 600;
+}
+
+.hint {
+    display: block;
+    margin-top: 8rpx;
+    font-size: 22rpx;
+    line-height: 1.6;
+}
+
+.switch-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: 20rpx;
+    padding-top: 20rpx;
+    border-top: 1rpx solid #f3f5f7;
+}
+
+.switch-copy {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    padding-right: 24rpx;
+}
+
+.switch-label {
+    font-size: 28rpx;
+}
+
+.switch-hint {
+    margin-top: 6rpx;
+    font-size: 22rpx;
+    line-height: 1.5;
+}
+
+.fixed-row {
+    margin-top: 8rpx;
+}
+
+.item-title {
+    font-size: 26rpx;
+}
+
+.item-amount {
+    font-size: 26rpx;
+    font-weight: 600;
+}
+
+.fixed-total {
+    margin-top: 12rpx;
+}
+
+.confirm-row {
+    display: flex;
+    align-items: center;
+    margin-top: 20rpx;
+}
+
+.checkbox {
+    width: 40rpx;
+    height: 40rpx;
+    margin-right: 16rpx;
+    border: 2rpx solid #cfd4da;
+    border-radius: 10rpx;
+    color: #ffffff;
+    font-size: 26rpx;
+    line-height: 36rpx;
+    text-align: center;
+}
+
+.checkbox-on {
+    border-color: #0f9d76;
+    background: #0f9d76;
+}
+
+.confirm-text {
+    font-size: 26rpx;
+}
+
+.secondary-actions {
+    display: flex;
+    margin-top: 16rpx;
+}
+
+.action {
+    flex: 1;
+    margin-top: 0;
+    font-size: 26rpx;
+}
+
+.action + .action {
+    margin-left: 16rpx;
+}
+
+.foot-note {
+    display: block;
+    margin-top: 24rpx;
+    font-size: 22rpx;
+    line-height: 1.7;
+}

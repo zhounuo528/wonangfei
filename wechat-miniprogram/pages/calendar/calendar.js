@@ -190,6 +190,19 @@ Page({
         this.render(monthKey(today), today);
     },
 
+    goDayEdit(event) {
+        const key = event.currentTarget.dataset.key || this.data.selectedKey;
+        if (!key) {
+            return;
+        }
+        wx.navigateTo({
+            url: '/pages/day/day?date=' + key,
+            fail: () => {
+                wx.showToast({ title: '修改页暂未开放', icon: 'none' });
+            },
+        });
+    },
+
     goReport() {
         wx.navigateTo({ url: '/pages/report/report?month=' + this.data.month });
     },

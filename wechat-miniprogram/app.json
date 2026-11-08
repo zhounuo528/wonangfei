@@ -2,6 +2,7 @@
   "pages": [
     "pages/today/today",
     "pages/calendar/calendar",
+    "pages/day/day",
     "pages/costs/costs",
     "pages/mine/mine",
     "pages/goal/goal",
