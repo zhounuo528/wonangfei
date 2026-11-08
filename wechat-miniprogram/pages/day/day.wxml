@@ -4,7 +4,7 @@
             <text class="eyebrow">{{future ? '计划安排' : (isToday ? '今天' : '已过去的日期')}}</text>
             <text class="day-title">{{dateLabel}} · {{weekday}}</text>
         </view>
-        <text class="pill {{hasRecord ? 'pill-working' : ''}}">{{hasRecord ? '有工时记录' : '无工时记录'}}</text>
+        <text class="pill {{hasRecord ? 'pill-working' : ''}}">{{hasRecord ? '有工时记录' : (hasDayEntry ? '已补录 · 无工时' : '无工时记录')}}</text>
     </view>
 
     <view class="card">
@@ -50,6 +50,42 @@
             </view>
             <switch checked="{{includeOvertimePay}}" color="#0f9d76" bindchange="handleOvertimePay" />
         </view>
+    </view>
+
+    <view class="card" wx:if="{{!future}}">
+        <view class="card-head">
+            <text class="card-title">上下班时间</text>
+            <text class="muted">{{hasRecord ? '可直接改时间' : '还没打卡'}}</text>
+        </view>
+
+        <view class="session-row" wx:for="{{sessionRows}}" wx:key="index">
+            <text class="session-index">第 {{index + 1}} 段</text>
+            <picker wx:if="{{item.editable}}" mode="time" value="{{item.startTime}}" data-index="{{index}}" data-field="start" bindchange="handleSessionTime">
+                <view class="time-chip">{{item.startTime}}</view>
+            </picker>
+            <text class="time-plain" wx:else>{{item.startTime}}</text>
+            <text class="session-dash">–</text>
+            <picker wx:if="{{item.editable}}" mode="time" value="{{item.endTime}}" data-index="{{index}}" data-field="end" bindchange="handleSessionTime">
+                <view class="time-chip">{{item.open ? '未下班' : item.endTime}}</view>
+            </picker>
+            <text class="time-plain" wx:else>{{item.open ? '未下班' : item.endTime}}</text>
+            <text class="muted session-tag" wx:if="{{item.crossDay}}">跨日不改</text>
+        </view>
+
+        <text class="muted empty-row" wx:if="{{sessionRows.length === 0}}">这天没有打卡记录。</text>
+
+        <view class="add-session" wx:if="{{canAddSession}}">
+            <text class="muted add-label">补记一段</text>
+            <picker mode="time" value="{{newStart}}" bindchange="handleNewStart">
+                <view class="time-chip">{{newStart}}</view>
+            </picker>
+            <text class="session-dash">–</text>
+            <picker mode="time" value="{{newEnd}}" bindchange="handleNewEnd">
+                <view class="time-chip">{{newEnd}}</view>
+            </picker>
+        </view>
+
+        <text class="muted hint">忘记打卡时按实际时间补一段，保存后会重算当天工资与加班；跨日的班次暂不支持在这里改。</text>
     </view>
 
     <view class="card" wx:if="{{canEditExpenses}}">
@@ -128,5 +164,20 @@
         <button class="quiet action" wx:if="{{future}}" bindtap="clearPlan">清除这天的计划</button>
     </view>
 
-    <text class="muted foot-note">这里只调整这一天的类型与固定负担，不改花销、不改上下班时段。改时段请在工作台用时间修正；补记实际工时不在这里做。</text>
+    <text class="muted foot-note">这里调整的是这一天本身：类型、工资处理、上下班时间、花销与固定负担。月薪、排班规则和其他日期都不受影响。</text>
+</view>
+
+<view class="mask" wx:if="{{showOvertimeSheet}}"></view>
+<view class="sheet" wx:if="{{showOvertimeSheet}}">
+    <text class="sheet-title">这次下班后加班超过两小时</text>
+    <text class="muted sheet-note">请选择免费加班，或填写这次额外的加班费。</text>
+    <view class="field">
+        <text class="field-label">本次加班费（元）</text>
+        <input class="field-input" type="digit" placeholder="例如 120.00" value="{{overtimeAmount}}" bindinput="handleOvertimeAmount" />
+    </view>
+    <text class="error-text" wx:if="{{overtimeError !== ''}}">{{overtimeError}}</text>
+    <view class="sheet-actions">
+        <button class="sheet-button quiet" bindtap="handleOvertimeFree">免费加班</button>
+        <button class="sheet-button primary" bindtap="handleOvertimePaid">填写并保存</button>
+    </view>
 </view>

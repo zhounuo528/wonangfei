@@ -6,9 +6,9 @@ import {
     undoableCalendarChange,
     undoCalendarChange,
 } from '../../core/calendar.js';
-import { dateKey, isWorkday, monthKey } from '../../core/model.js';
+import { dateKey, monthKey } from '../../core/model.js';
 import { formatCurrency } from '../../core/money.js';
-import { dateText, weekdayLabel, todayKey } from '../../utils/format.js';
+import { dateText, weekdayLabel, todayKey, timeText } from '../../utils/format.js';
 
 const KINDS = [
     { key: 'work', label: '上班', hint: '普通工作日，或临时补一天班' },
@@ -53,6 +53,13 @@ Page({
         expenseRows: [],
         expenseTotalText: '0.00',
         monthItems: [],
+        sessionRows: [],
+        canAddSession: false,
+        newStart: '',
+        newEnd: '',
+        showOvertimeSheet: false,
+        overtimeAmount: '',
+        overtimeError: '',
         needBackfillConfirm: false,
         backfillConfirmed: false,
         canUndo: false,
@@ -94,6 +101,35 @@ Page({
         const monthExpenses = state.expenses.filter(expense => expense.scope === 'month' && expense.month === month);
         const expenseTotal = dayExpenses.reduce((sum, expense) => sum + expense.amount, 0);
 
+        const sessions = (day && day.sessions) || [];
+        const sessionRows = sessions.map((session, index) => {
+            const startDay = dateKey(new Date(session.start));
+            const endDay = session.end === null ? null : dateKey(new Date(session.end));
+            const crossDay = endDay !== null && endDay !== key;
+            return {
+                index,
+                origStart: session.start,
+                origEnd: session.end,
+                // 用「显示值」判断是否被改动：原始时间带秒和毫秒，直接比时间戳会把每一段都当成改过，
+                // 既会在请假时报错，也会静默把未编辑时段的秒抹成 0。
+                origStartText: timeText(session.start),
+                origEndText: session.end === null ? '' : timeText(session.end),
+                startTime: timeText(session.start),
+                endTime: session.end === null ? '' : timeText(session.end),
+                open: session.end === null,
+                crossDay,
+                editable: !crossDay && startDay === key,
+            };
+        });
+
+        if (!this.defaultsApplied) {
+            this.defaultsApplied = true;
+            this.setData({
+                newStart: info.settings.start,
+                newEnd: key === today ? timeText(now) : info.settings.end,
+            });
+        }
+
         this.setData({
             dateLabel: dateText(key),
             weekday: weekdayLabel(key),
@@ -133,6 +169,8 @@ Page({
                 name: expense.name,
                 amountText: formatCurrency(expense.amount),
             })),
+            sessionRows,
+            canAddSession: !info.future && sessionRows.length === 0,
             needBackfillConfirm: !hasRecord && key < today,
             canUndo: !!undo,
             error: '',
@@ -214,7 +252,96 @@ Page({
         this.setData({ expenseRows: rows, error: '' });
     },
 
+    handleSessionTime(event) {
+        const index = Number(event.currentTarget.dataset.index);
+        const field = event.currentTarget.dataset.field;
+        const value = event.detail.value;
+        const patch = { error: '' };
+        patch['sessionRows[' + index + '].' + field + 'Time'] = value;
+        if (field === 'end') {
+            patch['sessionRows[' + index + '].open'] = value === '';
+        }
+        this.setData(patch);
+    },
+
+    handleNewStart(event) {
+        this.setData({ newStart: event.detail.value, error: '' });
+    },
+
+    handleNewEnd(event) {
+        this.setData({ newEnd: event.detail.value, error: '' });
+    },
+
+    stampOf(time) {
+        if (typeof time !== 'string' || !/^([01]\d|2[0-3]):[0-5]\d$/.test(time)) {
+            return null;
+        }
+        return new Date(this.data.date + 'T' + time + ':00').getTime();
+    },
+
+    // 只提交真正改动过的时段；未改的段原样保留，避免无意义重算。
+    buildRecords() {
+        const records = [];
+        const rows = this.data.sessionRows || [];
+        for (let i = 0; i < rows.length; i += 1) {
+            const row = rows[i];
+            if (!row.editable) {
+                continue;
+            }
+            const start = this.stampOf(row.startTime);
+            if (start === null) {
+                this.setData({ error: '第 ' + (i + 1) + ' 段的上班时间格式不对' });
+                return null;
+            }
+            let end = null;
+            if (row.endTime !== '') {
+                end = this.stampOf(row.endTime);
+                if (end === null) {
+                    this.setData({ error: '第 ' + (i + 1) + ' 段的下班时间格式不对' });
+                    return null;
+                }
+                if (end <= start) {
+                    this.setData({ error: '第 ' + (i + 1) + ' 段的下班时间要晚于上班时间' });
+                    return null;
+                }
+            } else if (!row.open) {
+                this.setData({ error: '第 ' + (i + 1) + ' 段缺下班时间' });
+                return null;
+            }
+            const sameStart = row.startTime === row.origStartText;
+            const sameEnd = row.open ? row.endTime === '' : row.endTime === row.origEndText;
+            if (sameStart && sameEnd) {
+                continue;
+            }
+            records.push({ sessionIndex: row.index, start, end });
+        }
+
+        if (this.data.canAddSession && this.data.newStart !== '' && this.data.newEnd !== '') {
+            const start = this.stampOf(this.data.newStart);
+            const end = this.stampOf(this.data.newEnd);
+            if (start === null || end === null) {
+                this.setData({ error: '补记的时间格式不对' });
+                return null;
+            }
+            if (end <= start) {
+                this.setData({ error: '补记的下班时间要晚于上班时间' });
+                return null;
+            }
+            records.push({ sessionIndex: 'new', start, end });
+        }
+
+        return records;
+    },
+
     save() {
+        const input = this.buildInput();
+        if (!input) {
+            return;
+        }
+        this.commit(input);
+    },
+
+    buildInput() {
         const key = this.data.date;
         const input = {
             date: key,
@@ -227,7 +354,7 @@ Page({
             const amount = Number(this.data.amount);
             if (!Number.isFinite(amount) || amount <= 0 || amount > 1e9) {
                 this.setData({ error: '自定补薪须大于 0、至多 10 亿' });
-                return;
+                return null;
             }
             input.amount = Math.round(amount * 100) / 100;
         }
@@ -235,7 +362,7 @@ Page({
         if (this.data.needBackfillConfirm) {
             if (!this.data.backfillConfirmed) {
                 this.setData({ error: '这天是空白的历史日期，请先勾选下方的补录确认' });
-                return;
+                return null;
             }
             input.confirmedBackfill = true;
         }
@@ -255,12 +382,12 @@ Page({
                 }
                 if (name === '') {
                     this.setData({ error: '第 ' + (i + 1) + ' 笔花销还差个名称' });
-                    return;
+                    return null;
                 }
                 const amount = Number(amountText);
                 if (!Number.isFinite(amount) || amount <= 0 || amount > 1e9) {
                     this.setData({ error: '第 ' + (i + 1) + ' 笔花销金额需大于 0、至多 10 亿' });
-                    return;
+                    return null;
                 }
                 const row = { name, amount: Math.round(amount * 100) / 100 };
                 if (rows[i].id) {
@@ -271,11 +398,48 @@ Page({
             input.expenses = expenses;
         }
 
-        const result = apply(state => editCalendarDay(state, input, Date.now()));
+        const records = this.buildRecords();
+        if (records === null) {
+            return null;
+        }
+        if (records.length > 0) {
+            input.records = records;
+        }
+
+        return input;
+    },
+
+    commit(input) {
+        const now = Date.now();
+        let result = apply(state => editCalendarDay(state, input, now));
+
+        // 空白日期还没有当天记录，花销需要先建立记录再写入：自动补一步，用户只点一次保存。
+        if (!result.ok && result.error.indexOf('请先补记当日考勤') !== -1 && input.confirmedBackfill === true) {
+            const bootstrap = {
+                date: input.date,
+                kind: input.kind,
+                payMode: input.payMode,
+                includeOvertimePay: input.includeOvertimePay,
+                confirmedBackfill: true,
+            };
+            const created = apply(state => editCalendarDay(state, bootstrap, now));
+            if (!created.ok) {
+                this.setData({ error: created.error });
+                return;
+            }
+            result = apply(state => editCalendarDay(state, input, now));
+        }
+
         if (!result.ok) {
+            if (result.error.indexOf('本次实际下班后累计加班超过两小时') !== -1) {
+                this.pendingPayload = input;
+                this.setData({ showOvertimeSheet: true, overtimeAmount: '', overtimeError: '', error: '' });
+                return;
+            }
             this.setData({ error: result.error });
             return;
         }
+
         if (!result.result.changed) {
             wx.showToast({ title: '没有变化', icon: 'none' });
             return;
@@ -283,6 +447,39 @@ Page({
 
         wx.showToast({ title: '已更新这一天', icon: 'none' });
         setTimeout(() => wx.navigateBack(), 400);
+    },
+
+    handleOvertimeAmount(event) {
+        this.setData({ overtimeAmount: event.detail.value, overtimeError: '' });
+    },
+
+    applyDecision(decision) {
+        const payload = this.pendingPayload;
+        if (!payload) {
+            return;
+        }
+        const result = apply(state => editCalendarDay(state, { ...payload, closeDecision: decision }, Date.now()));
+        if (!result.ok) {
+            this.setData({ overtimeError: result.error });
+            return;
+        }
+        this.pendingPayload = null;
+        this.setData({ showOvertimeSheet: false });
+        wx.showToast({ title: '已更新这一天', icon: 'none' });
+        setTimeout(() => wx.navigateBack(), 400);
+    },
+
+    handleOvertimeFree() {
+        this.applyDecision({ kind: 'free', amount: 0 });
+    },
+
+    handleOvertimePaid() {
+        const amount = Number(this.data.overtimeAmount);
+        if (!Number.isFinite(amount) || amount <= 0 || amount > 1e9) {
+            this.setData({ overtimeError: '请填写大于 0、至多 10 亿的加班费' });
+            return;
+        }
+        this.applyDecision({ kind: 'paid', amount });
     },
 
     clearPlan() {

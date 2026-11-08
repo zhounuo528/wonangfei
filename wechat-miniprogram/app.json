@@ -28,7 +28,7 @@
       },
       {
         "pagePath": "pages/calendar/calendar",
-        "text": "小月历"
+        "text": "月历"
       },
       {
         "pagePath": "pages/costs/costs",

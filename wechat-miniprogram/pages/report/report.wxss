@@ -79,7 +79,7 @@
 .foot-note {
     display: block;
     margin-top: 12rpx;
-    font-size: 22rpx;
+    font-size: 24rpx;
     line-height: 1.6;
 }
 

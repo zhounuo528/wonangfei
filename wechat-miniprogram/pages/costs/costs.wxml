@@ -10,13 +10,14 @@
                 <text class="link" bindtap="openExpenseForm">＋ 记一笔</text>
             </view>
             <view class="empty" wx:if="{{expenseList.length === 0}}">还没有花销，今天轻装上阵。</view>
-            <view class="list-item" wx:for="{{expenseList}}" wx:key="id">
+            <view class="list-item" wx:for="{{expenseList}}" wx:key="id" data-date="{{item.dateKey}}" bindtap="goDayEdit">
                 <view class="item-main">
                     <text class="item-title">{{item.name}}</text>
                     <text class="muted item-sub">{{item.category}} · {{item.dateLabel}}</text>
                 </view>
                 <text class="item-amount">{{item.amountText}}</text>
             </view>
+            <text class="muted foot-note" wx:if="{{expenseList.length > 0}}">点击某条当日花销，可以改金额或删除；整月分摊请到归属月份里调整。</text>
         </view>
     </block>
 
@@ -84,7 +85,7 @@
         <text class="field-label">这笔算哪儿</text>
         <view class="chip-row">
             <view class="chip {{expenseScope === 'day' ? 'chip-active' : ''}}" data-scope="day" bindtap="handleExpenseScope">当日</view>
-            <view class="chip {{expenseScope === 'month' ? 'chip-active' : ''}}" data-scope="month" bindtap="handleExpenseScope">整月 · 按考勤工作日分摊</view>
+            <view class="chip {{expenseScope === 'month' ? 'chip-active' : ''}}" data-scope="month" bindtap="handleExpenseScope">整月分摊</view>
         </view>
     </view>
     <view class="field" wx:if="{{expenseScope === 'month'}}">

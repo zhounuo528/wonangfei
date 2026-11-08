@@ -6,14 +6,11 @@ import {
     saveExtraIncome,
     setExtraIncomeVoided,
     EXTRA_INCOME_CATEGORIES,
-    dateKey,
     monthKey,
-    recordingStart,
 } from '../../core/model.js';
-import { formatCurrency, formatAmount } from '../../core/money.js';
+import { formatCurrency } from '../../core/money.js';
 import { dateText, monthText, todayKey } from '../../utils/format.js';
-
-const EXPENSE_CATEGORIES = ['早餐', '午餐', '晚餐', '通勤', '咖啡', '房租', '自定义'];
+import { EXPENSE_CATEGORIES } from '../../utils/categories.js';
 const FIXED_PERIODS = [
     { key: 'month', label: '每月' },
     { key: 'quarter', label: '每季度' },
@@ -87,6 +84,7 @@ Page({
                     ? monthText(expense.month) + ' 整月分摊'
                     : dateText(expense.date),
                 scope: expense.scope || 'day',
+                dateKey: expense.scope === 'month' ? '' : expense.date,
             }));
 
         const fixedList = state.fixed.map(item => ({
@@ -126,6 +124,20 @@ Page({
 
     handleTab(event) {
         this.setData({ tab: event.currentTarget.dataset.key });
+    },
+
+    // 花销的修改与删除统一在「修改这一天」里做，避免两套规则各算一遍。
+    goDayEdit(event) {
+        const date = event.currentTarget.dataset.date;
+        if (!date) {
+            return;
+        }
+        wx.navigateTo({
+            url: '/pages/day/day?date=' + date,
+            fail: () => {
+                wx.showToast({ title: '修改页暂未开放', icon: 'none' });
+            },
+        });
     },
 
     openExpenseForm() {

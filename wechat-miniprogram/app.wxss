@@ -34,7 +34,7 @@ page {
 
 .eyebrow {
     color: #0f9d76;
-    font-size: 22rpx;
+    font-size: 24rpx;
     letter-spacing: 2rpx;
 }
 
@@ -51,7 +51,7 @@ page {
 }
 
 .small {
-    font-size: 22rpx;
+    font-size: 24rpx;
 }
 
 .strong {
@@ -119,7 +119,7 @@ page {
     border-radius: 999rpx;
     background: #eef1f4;
     color: #5c636e;
-    font-size: 22rpx;
+    font-size: 24rpx;
 }
 
 .pill-working {

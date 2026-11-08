@@ -18,7 +18,7 @@
                 wx:for="{{cells}}"
                 wx:key="id"
                 data-key="{{item.key}}"
-                bindtap="{{item.blank ? 'noop' : 'handleSelectDay'}}"
+                bindtap="handleSelectDay"
             >
                 <block wx:if="{{!item.blank}}">
                     <text class="cell-day">{{item.label}}</text>

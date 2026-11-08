@@ -5,14 +5,12 @@ import {
     dayStats,
     monthStats,
     calendarPolicy,
-    settingsForDay,
     isWorkday,
     isAbsent,
-    datesInMonth,
     attendanceStatus,
     activeSession,
 } from '../../core/model.js';
-import { formatAmount, formatCurrency } from '../../core/money.js';
+import { formatCurrency } from '../../core/money.js';
 import { duration, timeText, monthText, weekdayLabel, todayKey, shiftMonth, dateText } from '../../utils/format.js';
 
 const KIND_TEXT = {
@@ -37,6 +35,7 @@ Page({
             { key: 'rest', text: '休息', tone: 'tone-rest' },
             { key: 'leave', text: '请假', tone: 'tone-leave' },
             { key: 'swap', text: '调休', tone: 'tone-swap' },
+            { key: 'overtime', text: '休息日加班', tone: 'tone-overtime' },
         ],
     },
 

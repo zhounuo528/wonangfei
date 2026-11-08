@@ -76,6 +76,6 @@
     display: block;
     padding-top: 20rpx;
     border-top: 1rpx solid #f3f5f7;
-    font-size: 22rpx;
+    font-size: 24rpx;
     line-height: 1.6;
 }

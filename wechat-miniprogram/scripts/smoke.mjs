@@ -319,6 +319,51 @@ expenseDayPage.removeExpenseRow({ currentTarget: { dataset: { index: 0 } } });
 expenseDayPage.save();
 check('清空当日花销后为 0 笔', dayScopeExpenses().length === 0, dayScopeExpenses().length);
 
+// 10) 补记漏掉的班次，再修正上班时间
+const backfillDate = new Date();
+backfillDate.setDate(backfillDate.getDate() - 3);
+const backfillKey = core.dateKey(backfillDate);
+
+const backfillPage = await loadPage('day');
+backfillPage.onLoad({ date: backfillKey });
+backfillPage.onShow();
+check('空白历史要求先勾选补录确认', backfillPage.data.needBackfillConfirm === true);
+check('没有打卡记录时可以补记一段', backfillPage.data.canAddSession === true);
+
+backfillPage.handleBackfillConfirm({ detail: { value: true } });
+backfillPage.handleNewStart({ detail: { value: '10:00' } });
+backfillPage.handleNewEnd({ detail: { value: '12:00' } });
+backfillPage.save();
+check('补记一段工时保存成功', backfillPage.data.error === '', backfillPage.data.error);
+
+const backfilledSessions = store.getState().days[backfillKey] ? store.getState().days[backfillKey].sessions : [];
+check('补记后这一天有一条时段', backfilledSessions.length === 1, backfilledSessions.length);
+check('补记的工时产生了收入', core.dayStats(store.getState(), backfillKey, Date.now()).elapsed === 2 * 3600000, core.dayStats(store.getState(), backfillKey, Date.now()).elapsed);
+
+const fixPage = await loadPage('day');
+fixPage.onLoad({ date: backfillKey });
+fixPage.onShow();
+check('已补记的日期回显时段', fixPage.data.sessionRows.length === 1 && fixPage.data.sessionRows[0].startTime === '10:00', JSON.stringify(fixPage.data.sessionRows.map(row => row.startTime)));
+fixPage.handleSessionTime({ currentTarget: { dataset: { index: 0, field: 'start' } }, detail: { value: '09:00' } });
+fixPage.save();
+const fixedStart = new Date(store.getState().days[backfillKey].sessions[0].start);
+check('修正上班时间生效', fixedStart.getHours() === 9, fixedStart.getHours());
+check('修正后工时变成 3 小时', core.dayStats(store.getState(), backfillKey, Date.now()).elapsed === 3 * 3600000, core.dayStats(store.getState(), backfillKey, Date.now()).elapsed);
+
+// 11) 账本里的花销可以直达当天修改
+todayPage2.openExpenseSheet({ currentTarget: { dataset: { name: '咖啡' } } });
+todayPage2.handleExpenseAmount({ detail: { value: '9' } });
+todayPage2.saveExpense();
+check('从工作台再记一笔当日花销', todayPage2.data.expenseError === '', todayPage2.data.expenseError);
+
+costsPage.onShow();
+const firstDayExpense = costsPage.data.expenseList.find(item => item.dateKey !== '');
+check('账本里的当日花销带有可跳转日期', !!firstDayExpense && !!firstDayExpense.dateKey, firstDayExpense && firstDayExpense.dateKey);
+if (firstDayExpense) {
+    costsPage.goDayEdit({ currentTarget: { dataset: { date: firstDayExpense.dateKey } } });
+}
+check('点击花销可以打开当天修改页', !!firstDayExpense);
+
 const failed = checks.filter(item => !item.ok);
 [todayPage, todayPage2].forEach(page => {
     if (page && typeof page.stopTicker === 'function') {

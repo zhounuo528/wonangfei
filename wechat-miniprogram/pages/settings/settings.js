@@ -4,7 +4,6 @@ import {
     saveSettings,
     configureAutomaticAttendance,
     configureClockInReminder,
-    dateKey,
 } from '../../core/model.js';
 import { todayKey } from '../../utils/format.js';
 

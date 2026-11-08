@@ -1,7 +1,7 @@
-import { getState, exportBackupText, importBackupText, clearAll } from '../../store/index.js';
+import { getState, exportBackupText, importBackupText, clearAll, storageStatus } from '../../store/index.js';
 import { dateKey, dayStats, monthStats, goalStats } from '../../core/model.js';
 import { formatCurrency } from '../../core/money.js';
-import { timeText, todayKey, monthText, dateText } from '../../utils/format.js';
+import { monthText, pad2 } from '../../utils/format.js';
 
 Page({
     data: {
@@ -35,8 +35,17 @@ Page({
             goalName: state.goal ? state.goal.name : '还没有目标',
             goalPercentText: state.goal ? Math.round(goal.progress * 100) + '%' : '未设置',
             recordedDays: Object.keys(state.days).filter(key => state.days[key].sessions && state.days[key].sessions.length > 0).length,
-            savedAtText: '记录保存于本机 · 不上传，不需要账号',
+            savedAtText: this.savedText(),
         });
+    },
+
+    savedText() {
+        const status = storageStatus();
+        if (!status.savedAt) {
+            return '记录保存在本机，不上传';
+        }
+        const date = new Date(status.savedAt);
+        return '上次保存 ' + pad2(date.getHours()) + ':' + pad2(date.getMinutes());
     },
 
     goGoal() {

@@ -71,7 +71,7 @@
 
 .rate-label {
     color: #8b9099;
-    font-size: 22rpx;
+    font-size: 24rpx;
 }
 
 .rate-value {
@@ -97,7 +97,7 @@
     display: block;
     margin-top: 18rpx;
     color: #8b9099;
-    font-size: 22rpx;
+    font-size: 24rpx;
 }
 
 .money-grid {
@@ -112,7 +112,7 @@
 
 .m-label {
     color: #8b9099;
-    font-size: 22rpx;
+    font-size: 24rpx;
 }
 
 .m-value {
@@ -130,7 +130,7 @@
     display: flex;
     margin-top: 16rpx;
     color: #8b9099;
-    font-size: 22rpx;
+    font-size: 24rpx;
 }
 
 .breakdown text + text {

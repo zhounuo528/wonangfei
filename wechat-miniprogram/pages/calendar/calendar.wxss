@@ -29,7 +29,7 @@
 
 .month-link {
     margin-top: 4rpx;
-    font-size: 22rpx;
+    font-size: 24rpx;
 }
 
 .weekday-row {
@@ -40,7 +40,7 @@
 .weekday {
     width: 14.28%;
     color: #9aa1ab;
-    font-size: 22rpx;
+    font-size: 24rpx;
     text-align: center;
 }
 
@@ -146,7 +146,7 @@
 .detail-plan {
     display: block;
     margin-top: 6rpx;
-    font-size: 22rpx;
+    font-size: 24rpx;
 }
 
 .time-row {
@@ -182,7 +182,7 @@
     margin-top: 16rpx;
     padding-top: 16rpx;
     border-top: 1rpx solid #f3f5f7;
-    font-size: 22rpx;
+    font-size: 24rpx;
     line-height: 1.6;
 }
 

@@ -5,12 +5,12 @@
 .foot-note {
     display: block;
     margin-top: 20rpx;
-    font-size: 22rpx;
+    font-size: 24rpx;
     line-height: 1.6;
 }
 
 .item-sub {
     display: block;
     margin-top: 4rpx;
-    font-size: 22rpx;
+    font-size: 24rpx;
 }

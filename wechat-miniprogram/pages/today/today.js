@@ -5,7 +5,6 @@ import {
     monthStats,
     goalStats,
     settingsForDay,
-    calendarPolicy,
     activeShift,
     attendanceStatus,
     startWork,
@@ -19,9 +18,9 @@ import {
 } from '../../core/model.js';
 import { shiftClock } from '../../core/shift-clock.js';
 import { formatAmount, formatCurrency, belowCentPerSecond } from '../../core/money.js';
-import { duration, timeText, weekdayLabel, todayKey } from '../../utils/format.js';
+import { duration, timeText, weekdayLabel } from '../../utils/format.js';
+import { EXPENSE_QUICK } from '../../utils/categories.js';
 
-const QUICK_CATEGORIES = ['早餐', '午餐', '晚餐', '通勤', '咖啡'];
 const FISH_KINDS = ['抽一根', '喝点水', '上个厕所', '假装很忙', '自定义'];
 
 const DISPLAY_OPTIONS = [
@@ -67,7 +66,7 @@ Page({
         fishCaption: '今天还没有摸鱼',
         actualText: '00:00:00',
         effectiveHourText: '—',
-        quickCategories: QUICK_CATEGORIES,
+        quickCategories: EXPENSE_QUICK,
         goalName: '还没有目标',
         goalAmounts: '设一个目标，让努力有盼头',
         goalPercent: 0,
@@ -133,8 +132,26 @@ Page({
         const now = Date.now();
         const key = dateKey(new Date(now));
         const stats = dayStats(state, key, now);
-        const month = monthStats(state, key, now);
-        const goal = goalStats(state, now);
+        // 每秒都全量重算当月 30 天等于每秒扫 30 遍花销表。
+        // 这里只算当天，月度与目标用上次全量结果叠加当天增量，8 秒后再全量校准一次。
+        const cache = this.slowCache;
+        const reuse = silent === true && cache && cache.dayKey === key && now - cache.at < 8000;
+        let month;
+        let goal;
+        if (reuse) {
+            const earnedDelta = stats.earned - cache.today.earned;
+            const netDelta = stats.net - cache.today.net;
+            month = {
+                ...cache.month,
+                earned: cache.month.earned + earnedDelta,
+                net: cache.month.net + netDelta,
+            };
+            goal = { ...cache.goal, pool: cache.goal.pool + netDelta };
+        } else {
+            month = monthStats(state, key, now);
+            goal = goalStats(state, now);
+            this.slowCache = { at: now, dayKey: key, month, goal, today: { earned: stats.earned, net: stats.net } };
+        }
         const clock = shiftClock(state, now);
         const shift = activeShift(state, now);
         const hidden = state.display === 'hidden';
@@ -238,7 +255,16 @@ Page({
             goalPercentText: goalProgress + '%',
         };
 
-        this.setData(next);
+        // 只提交真正变化的字段，减少每秒跨线程的数据量。
+        const patch = {};
+        Object.keys(next).forEach(field => {
+            if (this.data[field] !== next[field]) {
+                patch[field] = next[field];
+            }
+        });
+        if (Object.keys(patch).length > 0) {
+            this.setData(patch);
+        }
 
         const running = !!shift || clock.mode === 'upcoming' || clock.mode === 'due';
         if (running) {
@@ -466,15 +492,5 @@ Page({
 
     goGoal() {
         wx.navigateTo({ url: '/pages/goal/goal' });
-    },
-
-    goSettings() {
-        wx.switchTab({
-            url: '/pages/mine/mine',
-        });
-    },
-
-    noop() {
-        return null;
     },
 });

@@ -14,7 +14,7 @@
             </picker>
         </view>
         <view class="hero-amount {{heroNegative ? 'negative' : ''}}">
-            <text class="cny">¥</text>
+            <text class="cny" wx:if="{{!hidden}}">¥</text>
             <text class="amount">{{heroAmount}}</text>
         </view>
         <text class="hero-caption">{{heroCaption}}</text>

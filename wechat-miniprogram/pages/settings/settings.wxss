@@ -53,7 +53,7 @@
 
 .switch-hint {
     margin-top: 6rpx;
-    font-size: 22rpx;
+    font-size: 24rpx;
     line-height: 1.5;
 }
 
@@ -61,13 +61,13 @@
     display: block;
     margin-top: 16rpx;
     color: #0f9d76;
-    font-size: 22rpx;
+    font-size: 24rpx;
 }
 
 .foot-note {
     display: block;
     margin-top: 20rpx;
-    font-size: 22rpx;
+    font-size: 24rpx;
     line-height: 1.6;
 }
 
