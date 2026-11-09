@@ -73,9 +73,14 @@ page {
     align-items: center;
 }
 
+/* 小程序内置样式是 button:not([size="mini"]) { width: 184px; margin: 0 auto }，
+   :not() 让它的特异性高于单类选择器，必须用 !important 才能覆盖。 */
 .primary {
+    box-sizing: border-box;
+    width: 100% !important;
     height: 88rpx;
-    margin-top: 24rpx;
+    margin: 24rpx 0 0 !important;
+    padding: 0 24rpx;
     border-radius: 16rpx;
     background: #0f9d76;
     color: #ffffff;
@@ -89,7 +94,11 @@ page {
 }
 
 .quiet {
+    box-sizing: border-box;
+    width: 100% !important;
     height: 88rpx;
+    margin: 0 !important;
+    padding: 0 24rpx;
     border-radius: 16rpx;
     background: #f2f4f6;
     color: #1b1f24;

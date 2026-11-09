@@ -51,6 +51,35 @@ wechat-miniprogram/
 | 自动考勤补记 | 页面可见时定时检查 | `onShow` 调用 `reconcileAttendance()` |
 | 下班提醒 | 页面可见时弹窗 | `onShow` / tick 时弹一次，`markReminderDelivered` 去重 |
 | 界面 | DOM + CSS | WXML + WXSS，8 个页面 |
+| 按钮宽度 | 块级元素自然满宽 | 内置 `button:not([size="mini"])` 强制 184px，必须用 `!important` 覆盖 |
+
+## 常见坑（都是真机上才暴露的）
+
+- **button 不满宽**：小程序内置样式给非 mini 按钮写了 `width: 184px; margin: 0 auto`，且 `:not()` 让特异性高于单类选择器，`width: 100%` 不生效，要用 `!important`。
+- **flex 行里的固定宽输入框被压扁**：`width: 180rpx` 在 flex 子项上会被 `flex-shrink` 压缩，数字溢出边框；固定列要写 `flex: 0 0 170rpx`，可伸缩列补 `min-width: 0`。
+- **input 文字贴边**：只给 `padding` 不给 `height`，文字会按默认行高贴边裁切，要同时给 `height` 与 `line-height`。
+- **样式类跨页面失效**：页面 WXSS 相互隔离，`.chip` 只在 A 页定义，B 页用了就是纯文本。`validate.mjs` 现在会拦这类问题。
+- **本地图片路径写错不报错**：编译通过、真机空白。`validate.mjs` 会校验引用是否存在。
+
+## UI 自检（可选）
+
+改完样式可以用开发者工具的自动化接口直接截图核对，比反复扫码快：
+
+```sh
+cd /tmp && mkdir wb-automator && cd wb-automator
+npm init -y && npm install miniprogram-automator
+/Applications/wechatwebdevtools.app/Contents/MacOS/cli auto \
+  --project <工程绝对路径> --auto-port 9420
+```
+
+```js
+const automator = require('miniprogram-automator');
+const mp = await automator.connect({ wsEndpoint: 'ws://127.0.0.1:9420' });
+await mp.reLaunch('/pages/today/today');
+await mp.screenshot({ path: 'today.png' });
+const btn = (await (await mp.currentPage()).$$('button'))[0];
+console.log(await btn.size());   // 直接读渲染尺寸，不靠肉眼
+```
 
 ## 已实现
 
