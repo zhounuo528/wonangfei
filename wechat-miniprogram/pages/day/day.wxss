@@ -77,36 +77,55 @@
 }
 
 .expense-name {
-    flex: 1;
     box-sizing: border-box;
-    padding: 16rpx 20rpx;
+    flex: 1 1 auto;
+    min-width: 0;
+    height: 76rpx;
+    padding: 0 20rpx;
     border: 1rpx solid #dfe3e8;
     border-radius: 12rpx;
     background: #fbfcfd;
     font-size: 26rpx;
+    line-height: 76rpx;
 }
 
 .expense-amount {
     box-sizing: border-box;
-    width: 180rpx;
+    flex: 0 0 170rpx;
+    width: 170rpx;
+    height: 76rpx;
     margin-left: 12rpx;
-    padding: 16rpx 20rpx;
+    padding: 0 16rpx;
     border: 1rpx solid #dfe3e8;
     border-radius: 12rpx;
     background: #fbfcfd;
     font-size: 26rpx;
+    line-height: 76rpx;
     text-align: right;
 }
 
 .expense-remove {
+    flex: 0 0 auto;
     margin-left: 16rpx;
+    padding: 22rpx 0 22rpx 8rpx;
     color: #d4380d;
-    font-size: 24rpx;
+    font-size: 26rpx;
 }
 
 .add-row {
-    margin-top: 4rpx;
+    width: 100%;
+    height: 76rpx;
+    margin-top: 8rpx;
+    border: 1rpx dashed #cfd6dd;
+    border-radius: 14rpx;
+    background: transparent;
+    color: #0f9d76;
     font-size: 26rpx;
+    line-height: 74rpx;
+}
+
+.add-row::after {
+    border: none;
 }
 
 .empty-row {
@@ -153,12 +172,15 @@
 
 .daily-amount {
     box-sizing: border-box;
-    width: 180rpx;
-    padding: 14rpx 18rpx;
+    flex: 0 0 170rpx;
+    width: 170rpx;
+    height: 76rpx;
+    padding: 0 16rpx;
     border: 1rpx solid #dfe3e8;
     border-radius: 12rpx;
     background: #fbfcfd;
     font-size: 26rpx;
+    line-height: 76rpx;
     text-align: right;
 }
 

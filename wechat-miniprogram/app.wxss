@@ -198,11 +198,13 @@ page {
 .field-input {
     box-sizing: border-box;
     width: 100%;
-    padding: 20rpx;
+    height: 88rpx;
+    padding: 0 20rpx;
     border: 1rpx solid #dfe3e8;
     border-radius: 14rpx;
     background: #fbfcfd;
     font-size: 28rpx;
+    line-height: 88rpx;
 }
 
 .sheet-actions {
