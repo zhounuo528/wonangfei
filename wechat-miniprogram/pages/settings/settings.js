@@ -4,8 +4,13 @@ import {
     saveSettings,
     configureAutomaticAttendance,
     configureClockInReminder,
+    salaryEvents,
+    salaryForDate,
+    undoSalaryChange,
+    initialSalaryReference,
 } from '../../core/model.js';
-import { todayKey } from '../../utils/format.js';
+import { formatAmount } from '../../core/money.js';
+import { todayKey, dateText } from '../../utils/format.js';
 
 const SCHEDULE_MODES = [
     { key: 'double', label: '双休', hint: '默认周一至周五' },
@@ -56,6 +61,10 @@ Page({
         clockInReminder: false,
         endReminder: false,
         onboarded: false,
+        salaryFromMode: 'today',
+        salaryFromDate: '',
+        currentSalaryText: '—',
+        salaryTimeline: [],
         error: '',
         message: '',
     },
@@ -67,6 +76,7 @@ Page({
     load() {
         const state = getState();
         const settings = state.settings;
+        const today = todayKey();
         const index = SCHEDULE_MODES.findIndex(mode => mode.key === settings.scheduleMode);
         this.setData({
             scheduleIndex: index < 0 ? 0 : index,
@@ -86,6 +96,15 @@ Page({
             autoAttendance: !!(state.automaticAttendance && state.automaticAttendance.enabled),
             clockInReminder: !!(state.clockInReminder && state.clockInReminder.enabled),
             endReminder: !!(state.reminder && state.reminder.enabled),
+            currentSalaryText: formatAmount(salaryForDate(state, today)) + ' / 月',
+            salaryFromDate: this.data.salaryFromDate || today,
+            salaryTimeline: salaryEvents(state).reverse().map(entry => ({
+                id: entry.id,
+                effectiveLabel: dateText(entry.effectiveDate),
+                changeText: formatAmount(entry.fromSalary) + ' → ' + formatAmount(entry.salary),
+                changedLabel: '改于 ' + dateText(new Date(entry.changedAt).toISOString().slice(0, 10)),
+                canUndo: entry.source === 'dated-adjustment',
+            })),
             onboarded: !!state.onboarded,
         });
     },
@@ -183,16 +202,75 @@ Page({
         return input;
     },
 
+    handleSalaryFrom(event) {
+        this.setData({ salaryFromMode: event.currentTarget.dataset.mode, error: '', message: '' });
+    },
+
+    handleSalaryDate(event) {
+        this.setData({ salaryFromDate: event.detail.value, error: '' });
+    },
+
+    undoSalary(event) {
+        const id = event.currentTarget.dataset.id;
+        wx.showModal({
+            title: '撤销这次调薪',
+            content: '会按原来的工资重新计算生效日之后的日期，手动定价的日子保留。',
+            confirmText: '撤销',
+            confirmColor: '#d4380d',
+            success: modal => {
+                if (!modal.confirm) {
+                    return;
+                }
+                const result = apply(state => undoSalaryChange(state, id, Date.now()));
+                if (!result.ok) {
+                    this.setData({ error: result.error, message: '' });
+                    return;
+                }
+                this.setData({
+                    error: '',
+                    message: '已撤销这次调薪，重算 ' + result.result.affectedDates.length + ' 天。',
+                });
+                this.load();
+            },
+        });
+    },
+
     save() {
-        const today = todayKey();
         const input = this.buildInput();
         if (!Number.isFinite(input.salary) || input.salary < 0) {
             this.setData({ error: '月薪请填 0 到 10 亿之间的数字' });
             return;
         }
+        if (this.data.salaryFromMode === 'date' && !this.data.salaryFromDate) {
+            this.setData({ error: '请选择这次调薪的生效日期' });
+            return;
+        }
 
+        const salaryFrom = this.data.salaryFromMode === 'tomorrow'
+            ? 'tomorrow'
+            : this.data.salaryFromMode === 'date'
+                ? this.data.salaryFromDate
+                : 'today';
+
+        const state = getState();
+        const legacy = initialSalaryReference(state);
+        const willChange = Number(this.data.salary) !== salaryForDate(state, todayKey());
+        if (legacy && legacy.source === 'legacy-reference' && willChange) {
+            wx.showActionSheet({
+                itemList: ['这是首次填写工资', '这是真的从零调薪'],
+                success: res => {
+                    this.doSave(input, salaryFrom, res.tapIndex === 0 ? 'initial' : 'actual-change');
+                },
+            });
+            return;
+        }
+
+        this.doSave(input, salaryFrom, undefined);
+    },
+
+    doSave(input, salaryFrom, legacyChoice) {
         const result = apply(state => {
-            const info = saveSettings(state, input, 'today', Date.now());
+            const info = saveSettings(state, input, salaryFrom, Date.now(), legacyChoice ? { legacyChoice } : {});
             state.onboarded = true;
             return info;
         });
@@ -202,9 +280,25 @@ Page({
             return;
         }
 
+        const info = result.result;
+        const parts = [];
+        if (info.initialized) {
+            parts.push('工资已设置，从本月 1 日生效');
+        } else if (info.changed) {
+            parts.push('调薪已保存，' + dateText(info.effectiveDate) + '起生效');
+            if (info.affectedDates && info.affectedDates.length > 0) {
+                parts.push('重算 ' + info.affectedDates.length + ' 天');
+            }
+        } else {
+            parts.push('已保存，工资没有变化');
+        }
+        if (info.protectedDates && info.protectedDates.length > 0) {
+            parts.push(info.protectedDates.length + ' 天为手动定价，已保留');
+        }
+
         this.setData({
             error: '',
-            message: '已保存，从今天起生效。已记录日期的工时和花销保持原样。',
+            message: parts.join('；') + '。',
             payDays: String(input.payDays || this.data.payDays),
         });
         this.load();

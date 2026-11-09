@@ -49,6 +49,24 @@
         </view>
 
         <view class="field">
+            <text class="field-label">这次调薪从哪天生效</text>
+            <view class="chip-row">
+                <view class="chip {{salaryFromMode === 'today' ? 'chip-active' : ''}}" data-mode="today" bindtap="handleSalaryFrom">今天</view>
+                <view class="chip {{salaryFromMode === 'tomorrow' ? 'chip-active' : ''}}" data-mode="tomorrow" bindtap="handleSalaryFrom">明天</view>
+                <view class="chip {{salaryFromMode === 'date' ? 'chip-active' : ''}}" data-mode="date" bindtap="handleSalaryFrom">指定日期</view>
+            </view>
+        </view>
+
+        <view class="field" wx:if="{{salaryFromMode === 'date'}}">
+            <text class="field-label">生效日期</text>
+            <picker mode="date" value="{{salaryFromDate}}" bindchange="handleSalaryDate">
+                <view class="field-input picker-value">{{salaryFromDate}}</view>
+            </picker>
+        </view>
+
+        <text class="muted hint-line">当前生效月薪 {{currentSalaryText}}。调薪只影响生效日之后的日期，手动定价和补录过的日子不会被覆盖。</text>
+
+        <view class="field">
             <text class="field-label">计薪方式</text>
             <view class="chip-row">
                 <view class="chip {{payDaysMode === 'auto' ? 'chip-active' : ''}}" data-mode="auto" bindtap="handlePayDaysMode">按当月考勤自动计算</view>
@@ -98,6 +116,22 @@
         <text class="muted message" wx:if="{{message !== ''}}">{{message}}</text>
         <button class="primary" bindtap="save">保存设置</button>
         <text class="muted foot-note">首次点击开始会按当天设定的上班时间补算到现在；工资只在排班内增长，摸鱼不扣工资。排班与计薪天数只影响新日期，已记录的工时和花销保留原样。</text>
+    </view>
+
+    <view class="card" wx:if="{{salaryTimeline.length > 0}}">
+        <view class="card-head">
+            <text class="card-title">调薪记录</text>
+            <text class="muted">共 {{salaryTimeline.length}} 次</text>
+        </view>
+        <view class="list-item" wx:for="{{salaryTimeline}}" wx:key="id">
+            <view class="timeline-main">
+                <text class="timeline-date">自 {{item.effectiveLabel}} 起</text>
+                <text class="muted timeline-change">{{item.changeText}}</text>
+                <text class="muted timeline-note">{{item.changedLabel}}</text>
+            </view>
+            <text class="undo-link" wx:if="{{item.canUndo}}" data-id="{{item.id}}" catchtap="undoSalary">撤销</text>
+        </view>
+        <text class="muted foot-note">撤销会按原来的工资重算生效日之后的日期，手动定价的日子保留；更晚的独立调薪不受影响。</text>
     </view>
 
     <view class="card">

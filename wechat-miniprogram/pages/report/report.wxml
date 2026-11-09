@@ -31,6 +31,10 @@
                 <view><text class="muted">上班成本</text><text class="row-value">{{view.costs}}</text></view>
                 <view class="align-right"><text class="muted">净利润</text><text class="row-value {{view.netNegative ? 'negative' : ''}}">{{view.net}}</text></view>
             </view>
+            <view class="archive-row" wx:if="{{mode === 'month'}}">
+                <text class="muted">{{archived ? archivedText : '这个月还没归档回顾'}}</text>
+                <text class="link" wx:if="{{!archived}}" bindtap="archive">归档</text>
+            </view>
         </view>
 
         <view class="card">

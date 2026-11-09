@@ -1,5 +1,5 @@
-import { getState } from '../../store/index.js';
-import { monthlyReport, weeklyReport, dateKey } from '../../core/model.js';
+import { getState, apply } from '../../store/index.js';
+import { monthlyReport, weeklyReport, saveMonthlyReview, dateKey } from '../../core/model.js';
 import { formatCurrency } from '../../core/money.js';
 import { duration, monthText, dateText, shiftMonth, todayKey } from '../../utils/format.js';
 
@@ -15,11 +15,14 @@ Page({
         view: null,
         empty: false,
         error: '',
+        archived: false,
+        archivedText: '',
     },
 
     onLoad(options) {
         const month = options && options.month ? options.month : todayKey().slice(0, 7);
-        this.setData({ month, weekDate: todayKey() });
+        // 从月历带月份进来时，默认就落在月报上。
+        this.setData({ month, weekDate: todayKey(), mode: 'month' });
     },
 
     onShow() {
@@ -34,15 +37,30 @@ Page({
         try {
             if (this.data.mode === 'month') {
                 const report = monthlyReport(state, this.data.month, now);
-                this.setData({ view: this.buildView(report, 'month'), empty: !(report.recorded || report.costs), error: '' });
+                this.currentReport = report;
+                const snapshot = state.monthlyReviews && state.monthlyReviews.snapshots
+                    ? state.monthlyReviews.snapshots[this.data.month]
+                    : null;
+                this.setData({
+                    view: this.buildView(report, 'month'),
+                    empty: !(report.recorded || report.costs),
+                    archived: !!snapshot,
+                    archivedText: snapshot
+                        ? '已归档 · ' + dateText(new Date(snapshot.asOf).toISOString().slice(0, 10))
+                        : '',
+                    error: '',
+                });
                 return;
             }
             const weekKey = this.data.weekDate > today ? today : this.data.weekDate;
             const report = weeklyReport(state, weekKey, now);
+            this.currentReport = null;
             this.setData({
                 weekDate: weekKey,
                 view: this.buildView(report, 'week'),
                 empty: !(report.recorded || report.costs),
+                archived: false,
+                archivedText: '',
                 error: '',
             });
         } catch (error) {
@@ -86,6 +104,23 @@ Page({
 
     switchMode(event) {
         this.setData({ mode: event.currentTarget.dataset.mode }, () => this.render());
+    },
+
+    archive() {
+        const report = this.currentReport;
+        if (!report) {
+            return;
+        }
+        const result = apply(state => {
+            saveMonthlyReview(state, report, false);
+            return true;
+        });
+        if (!result.ok) {
+            wx.showToast({ title: result.error, icon: 'none' });
+            return;
+        }
+        wx.showToast({ title: '已归档这个月的回顾', icon: 'none' });
+        this.render();
     },
 
     prevPeriod() {

@@ -133,6 +133,35 @@
     margin-bottom: 16rpx;
 }
 
+.daily-row {
+    display: flex;
+    align-items: center;
+    margin-bottom: 16rpx;
+}
+
+.daily-main {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    padding-right: 20rpx;
+}
+
+.daily-sub {
+    margin-top: 4rpx;
+    font-size: 22rpx;
+}
+
+.daily-amount {
+    box-sizing: border-box;
+    width: 180rpx;
+    padding: 14rpx 18rpx;
+    border: 1rpx solid #dfe3e8;
+    border-radius: 12rpx;
+    background: #fbfcfd;
+    font-size: 26rpx;
+    text-align: right;
+}
+
 .session-index {
     width: 120rpx;
     color: #8b9099;

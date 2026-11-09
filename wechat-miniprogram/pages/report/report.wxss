@@ -87,3 +87,12 @@
     color: #8b9099;
     text-align: center;
 }
+
+.archive-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: 20rpx;
+    padding-top: 16rpx;
+    border-top: 1rpx solid #f3f5f7;
+}

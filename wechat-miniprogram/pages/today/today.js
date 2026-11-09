@@ -15,6 +15,8 @@ import {
     settleGoal,
     dueReminder,
     markReminderDelivered,
+    dueMonthlyReview,
+    saveMonthlyReview,
 } from '../../core/model.js';
 import { shiftClock } from '../../core/shift-clock.js';
 import { formatAmount, formatCurrency, belowCentPerSecond } from '../../core/money.js';
@@ -101,6 +103,7 @@ Page({
             wx.showToast({ title: '已按排班补记自动考勤', icon: 'none' });
             this.refresh();
         }
+        this.checkMonthlyReview();
     },
 
     onHide() {
@@ -274,6 +277,36 @@ Page({
         }
 
         this.checkEndReminder();
+    },
+
+    // 网页版在月末最后一天弹回顾；小程序没有常驻进程，改在进入工作台时判断一次。
+    checkMonthlyReview() {
+        const state = getState();
+        if (!state.onboarded) {
+            return;
+        }
+        const review = dueMonthlyReview(state, Date.now());
+        if (!review) {
+            return;
+        }
+        const applied = apply(current => {
+            saveMonthlyReview(current, review, true);
+            return true;
+        });
+        if (!applied.ok) {
+            return;
+        }
+        wx.showModal({
+            title: '这个月过完了',
+            content: '净额 ' + formatCurrency(review.net) + '，出勤 ' + review.workedDays + ' 天，摸鱼 ' + duration(review.fish) + '。回顾已归档，随时可以回来看。',
+            showCancel: false,
+            confirmText: '看看月报',
+            success: res => {
+                if (res.confirm) {
+                    wx.navigateTo({ url: '/pages/report/report?month=' + review.month });
+                }
+            },
+        });
     },
 
     // 网页版靠页面可见时弹提醒；小程序同理，只在没有其它弹层时提醒一次。

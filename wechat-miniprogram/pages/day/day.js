@@ -6,7 +6,7 @@ import {
     undoableCalendarChange,
     undoCalendarChange,
 } from '../../core/calendar.js';
-import { dateKey, monthKey } from '../../core/model.js';
+import { dateKey, monthKey, dailyFixedRows, editDailyFixedCosts } from '../../core/model.js';
 import { formatCurrency } from '../../core/money.js';
 import { dateText, weekdayLabel, todayKey, timeText } from '../../utils/format.js';
 
@@ -53,6 +53,8 @@ Page({
         expenseRows: [],
         expenseTotalText: '0.00',
         monthItems: [],
+        dailyRows: [],
+        hasDailyRows: false,
         sessionRows: [],
         canAddSession: false,
         newStart: '',
@@ -100,6 +102,17 @@ Page({
         const month = monthKey(key);
         const monthExpenses = state.expenses.filter(expense => expense.scope === 'month' && expense.month === month);
         const expenseTotal = dayExpenses.reduce((sum, expense) => sum + expense.amount, 0);
+
+        const dailyRows = info.future ? [] : dailyFixedRows(state, key).map(row => ({
+            id: row.id,
+            name: row.name,
+            repeatLabel: row.repeat === 'daily' ? '每天' : '每个工作日',
+            automaticAmount: row.automaticAmount,
+            automaticText: formatCurrency(row.automaticAmount),
+            amount: String(row.amount),
+            overridden: row.overridden,
+        }));
+        this.dailyOriginal = dailyRows.map(row => ({ fixedId: row.id, amount: Math.round(Number(row.amount) * 100) / 100 }));
 
         const sessions = (day && day.sessions) || [];
         const sessionRows = sessions.map((session, index) => {
@@ -170,6 +183,8 @@ Page({
                 amountText: formatCurrency(expense.amount),
             })),
             sessionRows,
+            dailyRows,
+            hasDailyRows: dailyRows.length > 0,
             canAddSession: !info.future && sessionRows.length === 0,
             needBackfillConfirm: !hasRecord && key < today,
             canUndo: !!undo,
@@ -272,6 +287,43 @@ Page({
         this.setData({ newEnd: event.detail.value, error: '' });
     },
 
+    handleDailyAmount(event) {
+        const index = Number(event.currentTarget.dataset.index);
+        const patch = { error: '' };
+        patch['dailyRows[' + index + '].amount'] = event.detail.value;
+        this.setData(patch);
+    },
+
+    restoreDaily() {
+        const result = apply(state => editDailyFixedCosts(state, { date: this.data.date, reset: true }, Date.now()));
+        if (!result.ok) {
+            this.setData({ error: result.error });
+            return;
+        }
+        wx.showToast({ title: '已恢复自动金额', icon: 'none' });
+        this.load();
+    },
+
+    buildDaily() {
+        if (!this.data.hasDailyRows) {
+            return { items: [], changed: false };
+        }
+        const items = [];
+        for (let i = 0; i < this.data.dailyRows.length; i += 1) {
+            const row = this.data.dailyRows[i];
+            const amount = Number(row.amount);
+            if (!Number.isFinite(amount) || amount < 0 || amount > 1e9) {
+                this.setData({ error: '「' + row.name + '」的金额要填 0 到 10 亿之间（填 0 表示这天不计）' });
+                return null;
+            }
+            items.push({ fixedId: row.id, amount: Math.round(amount * 100) / 100 });
+        }
+        return {
+            items,
+            changed: JSON.stringify(items) !== JSON.stringify(this.dailyOriginal || []),
+        };
+    },
+
     stampOf(time) {
         if (typeof time !== 'string' || !/^([01]\d|2[0-3]):[0-5]\d$/.test(time)) {
             return null;
@@ -288,6 +340,13 @@ Page({
             if (!row.editable) {
                 continue;
             }
+            // 先判断有没有改：不足一分钟的段显示出来首尾相同，先校验会误报「下班不晚于上班」。
+            const sameStart = row.startTime === row.origStartText;
+            const sameEnd = row.open ? row.endTime === '' : row.endTime === row.origEndText;
+            if (sameStart && sameEnd) {
+                continue;
+            }
+
             const start = this.stampOf(row.startTime);
             if (start === null) {
                 this.setData({ error: '第 ' + (i + 1) + ' 段的上班时间格式不对' });
@@ -307,11 +366,6 @@ Page({
             } else if (!row.open) {
                 this.setData({ error: '第 ' + (i + 1) + ' 段缺下班时间' });
                 return null;
-            }
-            const sameStart = row.startTime === row.origStartText;
-            const sameEnd = row.open ? row.endTime === '' : row.endTime === row.origEndText;
-            if (sameStart && sameEnd) {
-                continue;
             }
             records.push({ sessionIndex: row.index, start, end });
         }
@@ -406,6 +460,12 @@ Page({
             input.records = records;
         }
 
+        const daily = this.buildDaily();
+        if (daily === null) {
+            return null;
+        }
+        this.pendingDaily = daily;
+
         return input;
     },
 
@@ -441,8 +501,20 @@ Page({
         }
 
         if (!result.result.changed) {
-            wx.showToast({ title: '没有变化', icon: 'none' });
-            return;
+            const dailyTouched = this.pendingDaily && this.pendingDaily.changed;
+            if (!dailyTouched) {
+                wx.showToast({ title: '没有变化', icon: 'none' });
+                return;
+            }
+        }
+
+        // 每日重复费用的单日调整是独立事务，放在日编辑成功之后写入。
+        if (this.pendingDaily && this.pendingDaily.changed) {
+            const dailyResult = apply(state => editDailyFixedCosts(state, { date: input.date, items: this.pendingDaily.items }, Date.now()));
+            if (!dailyResult.ok) {
+                this.setData({ error: dailyResult.error });
+                return;
+            }
         }
 
         wx.showToast({ title: '已更新这一天', icon: 'none' });

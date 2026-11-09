@@ -154,9 +154,14 @@ check('今日已产生收入', beforeOut.earned > 0, beforeOut.earned);
 check('净额已扣除花销', beforeOut.net < beforeOut.earned, beforeOut.net);
 
 todayPage.handleWorkToggle();
-check('超过 2 小时加班时要求先选择加班费处理', todayPage.data.showOvertimeSheet === true, JSON.stringify({ sheet: todayPage.data.showOvertimeSheet, error: todayPage.data.overtimeError }));
-todayPage.handleOvertimeFree();
-check('免费加班后生成本日总结', !!todayPage.data.summary, todayPage.data.overtimeError);
+// 是否要求先选加班费取决于当前时刻是否已超过计划下班两小时，两种路径都合法。
+if (todayPage.data.showOvertimeSheet) {
+    check('超过 2 小时加班时要求先选择加班费处理', true);
+    todayPage.handleOvertimeFree();
+} else {
+    check('未达加班门槛时直接结算', !!todayPage.data.summary, todayPage.data.summary ? 'ok' : '缺少总结');
+}
+check('下班后生成本日总结', !!todayPage.data.summary, todayPage.data.overtimeError);
 check('下班后没有进行中的班次', !core.activeShift(store.getState(), Date.now()));
 
 // 3) 目标
@@ -363,6 +368,68 @@ if (firstDayExpense) {
     costsPage.goDayEdit({ currentTarget: { dataset: { date: firstDayExpense.dateKey } } });
 }
 check('点击花销可以打开当天修改页', !!firstDayExpense);
+
+// 12) 按日期调薪的时间线
+settingsPage.onShow();
+settingsPage.handleInput({ currentTarget: { dataset: { field: 'salary' } }, detail: { value: '7000' } });
+settingsPage.handleSalaryFrom({ currentTarget: { dataset: { mode: 'date' } } });
+settingsPage.handleSalaryDate({ detail: { value: backfillKey } });
+settingsPage.save();
+check('按指定日期调薪保存成功', settingsPage.data.error === '', settingsPage.data.error);
+check('调薪记录进入时间线', settingsPage.data.salaryTimeline.length === 1, settingsPage.data.salaryTimeline.length);
+check('生效日当天起按新工资', core.salaryForDate(store.getState(), backfillKey) === 7000, core.salaryForDate(store.getState(), backfillKey));
+check('生效日之前仍按旧工资', core.salaryForDate(store.getState(), '2026-01-15') !== 7000, core.salaryForDate(store.getState(), '2026-01-15'));
+
+const salaryEventId = settingsPage.data.salaryTimeline[0].id;
+settingsPage.undoSalary({ currentTarget: { dataset: { id: salaryEventId } } });
+check('撤销调薪后时间线清空', settingsPage.data.salaryTimeline.length === 0, settingsPage.data.salaryTimeline.length);
+check('撤销后恢复原工资', core.salaryForDate(store.getState(), backfillKey) !== 7000, core.salaryForDate(store.getState(), backfillKey));
+
+// 13) 每日重复费用的单日调整
+costsPage.openFixedForm();
+costsPage.handleFixedName({ detail: { value: '通勤' } });
+costsPage.handleFixedAmount({ detail: { value: '10' } });
+costsPage.handleFixedPeriod({ currentTarget: { dataset: { key: 'day' } } });
+costsPage.handleFixedRepeat({ currentTarget: { dataset: { key: 'workday' } } });
+costsPage.saveFixed();
+check('添加每日重复费用成功', costsPage.data.fixedError === '', costsPage.data.fixedError);
+
+const dailyFixedPage = await loadPage('day');
+dailyFixedPage.onLoad({ date: todayKeyValue });
+dailyFixedPage.onShow();
+check('单日页显示每日重复费用', dailyFixedPage.data.hasDailyRows === true && dailyFixedPage.data.dailyRows.length === 1, dailyFixedPage.data.dailyRows.length);
+const fixedBefore = core.dayStats(store.getState(), todayKeyValue, Date.now()).fixed;
+dailyFixedPage.handleDailyAmount({ currentTarget: { dataset: { index: 0 } }, detail: { value: '4' } });
+dailyFixedPage.save();
+const dailyOverride = store.getState().dailyFixedOverrides && store.getState().dailyFixedOverrides[todayKeyValue];
+check('单日调整写入覆盖记录', !!dailyOverride && dailyOverride.items[0].amount === 4, JSON.stringify(dailyOverride));
+const fixedAfter = core.dayStats(store.getState(), todayKeyValue, Date.now()).fixed;
+check('当天固定负担按新金额下降', Math.abs((fixedBefore - fixedAfter) - 6) < 1e-9, fixedBefore + ' → ' + fixedAfter);
+
+dailyFixedPage.onShow();
+check('已调整的日期标注为覆盖', dailyFixedPage.data.dailyRows[0].overridden === true);
+dailyFixedPage.restoreDaily();
+check('恢复自动后覆盖被清除', !(store.getState().dailyFixedOverrides && store.getState().dailyFixedOverrides[todayKeyValue]));
+
+// 14) 月末回顾归档
+reportPage.onLoad({ month: todayKeyValue.slice(0, 7) });
+reportPage.onShow();
+check('月报初始未归档', reportPage.data.archived === false, reportPage.data.mode + '/' + reportPage.data.month);
+reportPage.archive();
+check('归档这个月成功', reportPage.data.archived === true, reportPage.data.error);
+const snapshots = store.getState().monthlyReviews && store.getState().monthlyReviews.snapshots;
+const snapshot = snapshots ? snapshots[todayKeyValue.slice(0, 7)] : null;
+check('归档写入月报快照', !!snapshot && snapshot.month === todayKeyValue.slice(0, 7), snapshot && snapshot.month);
+
+// 15) 月末回顾：只在当月最后一天触发
+const lastDay = new Date();
+lastDay.setDate(1);
+lastDay.setMonth(lastDay.getMonth() + 1);
+lastDay.setDate(0);
+const lastDayTs = new Date(lastDay.getFullYear(), lastDay.getMonth(), lastDay.getDate(), 23, 0, 0).getTime();
+const dueReview = core.dueMonthlyReview(store.getState(), lastDayTs);
+check('月末最后一天会触发回顾', !!dueReview, dueReview && dueReview.month);
+check('月中不会触发回顾', core.dueMonthlyReview(store.getState(), new Date(lastDay.getFullYear(), lastDay.getMonth(), 5, 12, 0, 0).getTime()) === null);
 
 const failed = checks.filter(item => !item.ok);
 [todayPage, todayPage2].forEach(page => {

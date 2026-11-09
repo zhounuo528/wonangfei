@@ -71,6 +71,40 @@
     line-height: 1.6;
 }
 
+.hint-line {
+    display: block;
+    margin-top: 12rpx;
+    font-size: 24rpx;
+    line-height: 1.6;
+}
+
+.timeline-main {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    padding-right: 20rpx;
+}
+
+.timeline-date {
+    font-size: 26rpx;
+    font-weight: 600;
+}
+
+.timeline-change {
+    margin-top: 4rpx;
+    font-size: 26rpx;
+}
+
+.timeline-note {
+    margin-top: 2rpx;
+    font-size: 22rpx;
+}
+
+.undo-link {
+    color: #d4380d;
+    font-size: 24rpx;
+}
+
 .note {
     font-size: 24rpx;
     line-height: 1.7;

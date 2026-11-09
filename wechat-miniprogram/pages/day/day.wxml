@@ -144,6 +144,21 @@
         <text class="muted hint" wx:if="{{fixedUnallocatable}}">这个月考勤工作日为 0，无法折算固定负担，请先去设置里核对考勤。</text>
     </view>
 
+    <view class="card" wx:if="{{hasDailyRows}}">
+        <view class="card-head">
+            <text class="card-title">每日重复费用</text>
+            <text class="link" bindtap="restoreDaily">全部恢复自动</text>
+        </view>
+        <view class="daily-row" wx:for="{{dailyRows}}" wx:key="id">
+            <view class="daily-main">
+                <text class="item-title">{{item.name}}</text>
+                <text class="muted daily-sub">{{item.repeatLabel}}{{item.overridden ? ' · 已单独调整' : ''}} · 自动 {{item.automaticText}}</text>
+            </view>
+            <input class="daily-amount" type="digit" value="{{item.amount}}" data-index="{{index}}" bindinput="handleDailyAmount" />
+        </view>
+        <text class="muted hint">改成 0 表示这天不计这笔；只影响这一天，项目本身和其他日期不变。</text>
+    </view>
+
     <view class="card" wx:if="{{needBackfillConfirm}}">
         <view class="card-head">
             <text class="card-title">补录确认</text>
