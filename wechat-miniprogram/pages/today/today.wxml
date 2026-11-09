@@ -48,6 +48,7 @@
             <text class="muted">计薪 {{progressPercent}}%</text>
         </view>
         <text class="started">{{startedText}}</text>
+        <text class="work-hint" wx:if="{{workHint !== ''}}">{{workHint}}</text>
         <button class="primary" bindtap="handleWorkToggle">{{workButtonText}}</button>
     </view>
 

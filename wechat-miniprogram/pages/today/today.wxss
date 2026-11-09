@@ -100,6 +100,13 @@
     font-size: 24rpx;
 }
 
+.work-hint {
+    display: block;
+    margin-top: 6rpx;
+    color: #0f9d76;
+    font-size: 24rpx;
+}
+
 .money-grid {
     display: flex;
 }
