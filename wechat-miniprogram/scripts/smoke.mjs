@@ -431,6 +431,27 @@ const dueReview = core.dueMonthlyReview(store.getState(), lastDayTs);
 check('月末最后一天会触发回顾', !!dueReview, dueReview && dueReview.month);
 check('月中不会触发回顾', core.dueMonthlyReview(store.getState(), new Date(lastDay.getFullYear(), lastDay.getMonth(), 5, 12, 0, 0).getTime()) === null);
 
+// 16) 目标完成弹层：攒够后提示一次，确认后打标记不重复弹
+goalPage.onShow();
+goalPage.handleName({ detail: { value: '小目标' } });
+goalPage.handleAmount({ detail: { value: '100' } });
+goalPage.save();
+check('改小目标金额成功', goalPage.data.error === '', goalPage.data.error);
+
+costsPage.onShow();
+costsPage.openIncomeForm();
+costsPage.handleIncomeAmount({ detail: { value: '5000' } });
+costsPage.saveIncome();
+check('补足目标所需的意外之财', costsPage.data.incomeError === '', costsPage.data.incomeError);
+
+goalPage.onShow();
+goalPage.settle();
+check('目标结算成功', !!store.getState().goal.completedAt, goalPage.data.error);
+check('结算后还没打通知标记', store.getState().goal.notifiedAt === null);
+
+todayPage2.onShow();
+check('进入工作台后目标通知已打标记', store.getState().goal.notifiedAt !== null);
+
 const failed = checks.filter(item => !item.ok);
 [todayPage, todayPage2].forEach(page => {
     if (page && typeof page.stopTicker === 'function') {

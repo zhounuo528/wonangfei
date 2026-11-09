@@ -17,6 +17,8 @@ import {
     markReminderDelivered,
     dueMonthlyReview,
     saveMonthlyReview,
+    dueGoalNotice,
+    markGoalNotified,
 } from '../../core/model.js';
 import { shiftClock } from '../../core/shift-clock.js';
 import { formatAmount, formatCurrency, belowCentPerSecond } from '../../core/money.js';
@@ -104,6 +106,7 @@ Page({
             this.refresh();
         }
         this.checkMonthlyReview();
+        this.checkGoalNotice();
     },
 
     onHide() {
@@ -279,6 +282,27 @@ Page({
         this.checkEndReminder();
     },
 
+    // 目标攒够时提示一次：确认后才打标记，不会反复弹。
+    checkGoalNotice() {
+        const state = getState();
+        const notice = dueGoalNotice(state);
+        if (!notice) {
+            return;
+        }
+        wx.showModal({
+            title: '目标达成了',
+            content: '「' + notice.name + '」攒够了 ' + formatCurrency(notice.amount) + '。剩下的净赚会留给下一个目标。',
+            showCancel: false,
+            confirmText: '太好了',
+            success: () => {
+                const applied = apply(current => markGoalNotified(current, notice.id, Date.now()));
+                if (applied.ok) {
+                    this.refresh();
+                }
+            },
+        });
+    },
+
     // 网页版在月末最后一天弹回顾；小程序没有常驻进程，改在进入工作台时判断一次。
     checkMonthlyReview() {
         const state = getState();
@@ -408,6 +432,7 @@ Page({
             },
         });
         this.refresh();
+        this.checkGoalNotice();
     },
 
     handleOvertimeFree() {
