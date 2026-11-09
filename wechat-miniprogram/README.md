@@ -20,6 +20,7 @@ wechat-miniprogram/
 │   ├── compat.js                   小程序缺失能力的兼容层（新增）
 │   └── backup.js                   备份解析（替换 TextEncoder/IndexedDB，新增）
 ├── store/index.js                  wx 本地存储 + 迁移 + 原子写入（替换 browser-store）
+├── static/                         品牌素材（吉祥物三态 + 图标，按小程序尺寸重新导出）
 ├── utils/format.js                 时长、日期、百分比等视图格式化
 ├── utils/categories.js             花销分类（工作台与账本共用一份）
 ├── pages/                          today / calendar / day / costs / mine / goal / report / settings
@@ -65,6 +66,21 @@ wechat-miniprogram/
 
 - 关于页的版本检查（小程序走微信自身的版本更新机制，不需要读 `version.json`）。
 - 桌面版的迷你窗、菜单栏、置顶（小程序没有对应形态）。
+
+## 素材
+
+吉祥物与图标沿用网页版/桌面版的同一套设计（`web/src/mascot-*.png`、`src/icons/cat-*.png`），未重新绘制。原始素材是 1448×1086、单张 700 KB 以上，小程序按显示尺寸重新导出到 `static/`，三态合计 284 KB：
+
+| 文件 | 来源 | 用途 |
+|---|---|---|
+| `mascot-happy.png` | `web/src/mascot-happy.png`（缩到 400px） | 正常/已赚、隐藏金额 |
+| `mascot-anxious.png` | `web/src/mascot-anxious.png` | 今日还欠 |
+| `mascot-overtime.png` | `web/src/mascot-overtime.png` | 加班中 |
+| `logo.png` | `src/icons/cat-192.png`（缩到 160px） | 「我的」页头像 |
+
+表情与网页版同规则：加班 → 痛苦，净额为负 → 焦虑，其余（含隐藏金额）→ 开心。隐藏金额时不随盈亏变化，避免表情泄露金额方向。
+
+`scripts/validate.mjs` 会校验 WXML 里引用的本地图片是否真实存在——路径写错时编译不报错、真机只会空白。
 
 ## 运行
 

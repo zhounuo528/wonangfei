@@ -122,6 +122,20 @@ function checkWxml(page) {
 for (const page of appConfig.pages) {
     checkWxml(page);
     checkStyles(page);
+    checkAssets(page);
+}
+
+// 本地图片路径写错时，真机上只会显示空白，编译不报错，这里提前拦。
+function checkAssets(page) {
+    const source = read(`${page}.wxml`);
+    const pattern = /src="(\/[^"{}]+\.(?:png|jpg|jpeg|gif|svg|webp))"/g;
+    let match;
+    while ((match = pattern.exec(source)) !== null) {
+        const relative = match[1].slice(1);
+        if (!existsSync(path.join(root, relative))) {
+            fail(`${page}.wxml 引用了不存在的本地图片：${match[1]}`);
+        }
+    }
 }
 
 // 页面的 WXSS 是隔离的：某个类只在别的页面定义，这里就会渲染成无样式。

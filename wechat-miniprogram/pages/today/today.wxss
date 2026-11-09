@@ -30,6 +30,24 @@
     font-size: 20rpx;
 }
 
+.hero-body {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+}
+
+.hero-left {
+    flex: 1;
+    min-width: 0;
+}
+
+.mascot {
+    width: 220rpx;
+    height: 165rpx;
+    margin-left: 12rpx;
+    flex: 0 0 auto;
+}
+
 .hero-amount {
     display: flex;
     align-items: baseline;

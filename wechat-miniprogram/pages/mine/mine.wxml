@@ -1,6 +1,6 @@
 <view class="page">
     <view class="profile">
-        <view class="avatar">窝</view>
+        <image class="avatar-img" src="/static/logo.png" mode="aspectFill" />
         <view class="profile-main">
             <text class="profile-name">窝囊费</text>
             <text class="muted">让每一秒，都有回报</text>

@@ -13,11 +13,16 @@
                 <view class="display-switch">{{displayLabel}}<text class="caret">▾</text></view>
             </picker>
         </view>
-        <view class="hero-amount {{heroNegative ? 'negative' : ''}}">
-            <text class="cny" wx:if="{{!hidden}}">¥</text>
-            <text class="amount">{{heroAmount}}</text>
+        <view class="hero-body">
+            <view class="hero-left">
+                <view class="hero-amount {{heroNegative ? 'negative' : ''}}">
+                    <text class="cny" wx:if="{{!hidden}}">¥</text>
+                    <text class="amount">{{heroAmount}}</text>
+                </view>
+                <text class="hero-caption">{{heroCaption}}</text>
+            </view>
+            <image class="mascot" src="{{mascotSrc}}" mode="aspectFit" />
         </view>
-        <text class="hero-caption">{{heroCaption}}</text>
         <view class="hero-rates">
             <view class="rate">
                 <text class="rate-label">平均秒薪</text>

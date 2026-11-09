@@ -4,16 +4,12 @@
     padding: 16rpx 8rpx 32rpx;
 }
 
-.avatar {
+.avatar-img {
     width: 96rpx;
     height: 96rpx;
     border-radius: 28rpx;
     background: #e8f7f2;
-    color: #0f9d76;
-    font-size: 40rpx;
-    font-weight: 600;
-    line-height: 96rpx;
-    text-align: center;
+    flex: 0 0 auto;
 }
 
 .profile-main {

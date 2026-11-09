@@ -47,6 +47,7 @@ Page({
         heroAmount: '0.00',
         heroCaption: '每一秒的努力，都看得见。',
         heroNegative: false,
+        mascotSrc: '/static/mascot-happy.png',
         hidden: false,
         secondRate: '—',
         hourRate: '—',
@@ -219,9 +220,15 @@ Page({
             ? Math.min(100, Math.round((stats.elapsed / stats.planned) * 100))
             : 0;
 
+        // 猫咪三态与网页版一致：加班 → 痛苦，亏损 → 焦虑，隐藏金额与正常 → 开心。
+        const mood = clock.mode === 'overtime'
+            ? 'overtime'
+            : (hidden || stats.net >= 0 ? 'happy' : 'anxious');
+
         const goalProgress = state.goal ? Math.min(100, Math.round(goal.progress * 100)) : 0;
         const next = {
             ready: true,
+            mascotSrc: '/static/mascot-' + mood + '.png',
             dateLabel: key.slice(5).replace('-', ' / '),
             weekday: weekdayLabel(key),
             statusLabel: status ? status.label : '尚未开始',
