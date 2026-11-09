@@ -29,6 +29,7 @@ Page({
         cells: [],
         selectedKey: '',
         detail: null,
+        showDetail: false,
         monthSummary: null,
         legend: [
             { key: 'work', text: '计划上班', tone: 'tone-work' },
@@ -40,13 +41,12 @@ Page({
     },
 
     onShow() {
-        const state = getState();
         const month = this.data.month || monthKey(todayKey());
         const selected = this.data.selectedKey || todayKey();
-        this.render(month, selected);
+        this.render(month, selected, false);
     },
 
-    render(month, selectedKey) {
+    render(month, selectedKey, openDetail) {
         const state = getState();
         const now = Date.now();
         const today = dateKey(new Date(now));
@@ -107,6 +107,7 @@ Page({
             cells,
             selectedKey,
             detail,
+            showDetail: openDetail === true,
             monthSummary: {
                 net: formatCurrency(monthStat.net),
                 earned: formatCurrency(monthStat.earned),
@@ -168,12 +169,12 @@ Page({
 
     handlePrevMonth() {
         const month = shiftMonth(this.data.month, -1);
-        this.render(month, this.data.selectedKey);
+        this.render(month, this.data.selectedKey, false);
     },
 
     handleNextMonth() {
         const month = shiftMonth(this.data.month, 1);
-        this.render(month, this.data.selectedKey);
+        this.render(month, this.data.selectedKey, false);
     },
 
     handleSelectDay(event) {
@@ -181,12 +182,16 @@ Page({
         if (!key) {
             return;
         }
-        this.render(this.data.month, key);
+        this.render(this.data.month, key, true);
+    },
+
+    closeDetail() {
+        this.setData({ showDetail: false });
     },
 
     handleToday() {
         const today = todayKey();
-        this.render(monthKey(today), today);
+        this.render(monthKey(today), today, true);
     },
 
     goDayEdit(event) {

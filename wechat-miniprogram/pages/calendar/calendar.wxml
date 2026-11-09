@@ -33,6 +33,7 @@
                 <text class="muted">{{item.text}}</text>
             </view>
         </view>
+        <text class="muted tap-hint">点一下日期，看当天明细</text>
     </view>
 
     <view class="card" wx:if="{{monthSummary}}">
@@ -47,16 +48,19 @@
             <view class="sum-item"><text class="muted">出勤天数</text><text class="sum-value">{{monthSummary.workedDays}}</text></view>
         </view>
     </view>
+</view>
 
-    <view class="card" wx:if="{{detail}}">
-        <view class="card-head">
-            <view>
-                <text class="card-title">{{detail.dateLabel}}</text>
-                <text class="muted detail-plan">{{detail.planText}} · {{detail.planTime}}</text>
-            </view>
-            <text class="pill {{detail.statusTone}}">{{detail.statusLabel}}</text>
+<view class="mask" wx:if="{{showDetail && detail}}" bindtap="closeDetail"></view>
+<view class="sheet detail-sheet" wx:if="{{showDetail && detail}}">
+    <view class="card-head">
+        <view>
+            <text class="sheet-title">{{detail.dateLabel}}</text>
+            <text class="muted detail-plan">{{detail.planText}} · {{detail.planTime}}</text>
         </view>
+        <text class="pill {{detail.statusTone}}">{{detail.statusLabel}}</text>
+    </view>
 
+    <scroll-view class="detail-scroll" scroll-y>
         <view class="time-row">
             <view class="time-item"><text class="muted">上班记录</text><text class="time-value">{{detail.startText}}</text></view>
             <view class="time-item"><text class="muted">实际下班</text><text class="time-value">{{detail.endText}}{{detail.openSession ? '（进行中）' : ''}}</text></view>
@@ -71,7 +75,7 @@
         </block>
 
         <text class="muted detail-note" wx:if="{{detail.note !== ''}}">{{detail.note}}</text>
+    </scroll-view>
 
-        <button class="quiet edit-day" data-key="{{detail.key}}" bindtap="goDayEdit">修改这一天的安排</button>
-    </view>
+    <button class="primary" data-key="{{detail.key}}" bindtap="goDayEdit">修改这一天的安排</button>
 </view>

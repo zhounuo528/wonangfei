@@ -195,6 +195,16 @@ calendarPage.onShow();
 check('日历生成当月格子', calendarPage.data.cells.length >= 28, calendarPage.data.cells.length);
 check('日历选中今天', calendarPage.data.selectedKey === core.dateKey(new Date()));
 check('日历详情含收入明细', calendarPage.data.detail && calendarPage.data.detail.rows.length > 0);
+check('进入月历时不自动弹出详情', calendarPage.data.showDetail === false);
+
+const pickedKey = calendarPage.data.cells.filter(cell => !cell.blank)[0].key;
+calendarPage.handleSelectDay({ currentTarget: { dataset: { key: pickedKey } } });
+check('点日期直接弹出当天明细', calendarPage.data.showDetail === true && calendarPage.data.selectedKey === pickedKey, calendarPage.data.selectedKey);
+calendarPage.closeDetail();
+check('明细面板可以关闭', calendarPage.data.showDetail === false);
+calendarPage.handleSelectDay({ currentTarget: { dataset: { key: calendarPage.data.cells.filter(cell => !cell.blank).slice(-1)[0].key } } });
+check('换成另一天仍会弹出', calendarPage.data.showDetail === true);
+calendarPage.closeDetail();
 
 const reportPage = await loadPage('report');
 reportPage.onLoad({});
