@@ -43,3 +43,6 @@ deliverables/
 web/.test-browser/
 .vercel/
 handoff/
+
+# WeChat DevTools local settings（含本机路径与个人偏好，不进仓库）
+wechat-miniprogram/project.private.config.json
