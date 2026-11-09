@@ -34,7 +34,7 @@
         </view>
     </view>
 
-    <view class="card shift-card">
+    <view class="card">
         <view class="card-head">
             <text class="card-title">{{shiftLabel}}</text>
             <text class="muted">计划下班 {{shiftEnd}}</text>

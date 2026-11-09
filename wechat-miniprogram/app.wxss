@@ -241,3 +241,29 @@ page {
     font-size: 26rpx;
     text-align: center;
 }
+
+/* 以下组件级基础类放在全局：页面的 WXSS 是隔离的，
+   只在某个页面里定义会让别的页面「用了却没有样式」。 */
+.chip-row {
+    display: flex;
+    flex-wrap: wrap;
+}
+
+.chip {
+    margin: 0 16rpx 16rpx 0;
+    padding: 12rpx 24rpx;
+    border: 1rpx solid #dfe3e8;
+    border-radius: 999rpx;
+    color: #5c636e;
+    font-size: 24rpx;
+}
+
+.chip-active {
+    border-color: #0f9d76;
+    background: #e8f7f2;
+    color: #0f9d76;
+}
+
+.item-title {
+    font-size: 28rpx;
+}

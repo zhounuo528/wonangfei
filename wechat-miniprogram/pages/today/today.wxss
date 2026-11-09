@@ -168,26 +168,6 @@
     margin-top: 14rpx;
 }
 
-.chip-row {
-    display: flex;
-    flex-wrap: wrap;
-}
-
-.chip {
-    margin: 0 16rpx 16rpx 0;
-    padding: 12rpx 24rpx;
-    border: 1rpx solid #dfe3e8;
-    border-radius: 999rpx;
-    color: #5c636e;
-    font-size: 24rpx;
-}
-
-.chip-active {
-    border-color: #0f9d76;
-    background: #e8f7f2;
-    color: #0f9d76;
-}
-
 .sheet-note {
     display: block;
     margin-top: 10rpx;

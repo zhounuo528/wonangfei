@@ -121,6 +121,41 @@ function checkWxml(page) {
 
 for (const page of appConfig.pages) {
     checkWxml(page);
+    checkStyles(page);
+}
+
+// 页面的 WXSS 是隔离的：某个类只在别的页面定义，这里就会渲染成无样式。
+function checkStyles(page) {
+    const wxml = read(`${page}.wxml`);
+    const pageWxss = `${page}.wxss`;
+    const pageCss = existsSync(path.join(root, pageWxss)) ? read(pageWxss) : '';
+    const css = read('app.wxss') + '\n' + pageCss;
+
+    const used = new Set();
+    const classAttr = /class="([^"]*)"/g;
+    let match;
+    while ((match = classAttr.exec(wxml)) !== null) {
+        const value = match[1];
+        value.replace(/\{\{[^}]*\}\}/g, ' ').split(/\s+/).filter(Boolean).forEach(token => used.add(token));
+        // 三元表达式里只有 ? 和 : 后面的字符串是类名，比较用的字面量（如 === 'day'）不算
+        const expressions = value.match(/\{\{[^}]*\}\}/g) || [];
+        expressions.forEach(expression => {
+            const branches = expression.match(/[?:]\s*'([A-Za-z][\w-]*)'/g) || [];
+            branches.forEach(branch => {
+                used.add(branch.replace(/^[?:]\s*'/, '').replace(/'$/, ''));
+            });
+        });
+    }
+
+    for (const token of used) {
+        if (token.includes('_') || token.indexOf('{{') !== -1) {
+            continue;
+        }
+        const pattern = new RegExp('\\.' + token.replace(/-/g, '\\-') + '(?![\\w-])');
+        if (!pattern.test(css)) {
+            fail(`${page}.wxml 使用了未定义的样式类：.${token}（页面 WXSS 隔离，需在本页或 app.wxss 里定义）`);
+        }
+    }
 }
 
 // 4) 平台能力越界检查

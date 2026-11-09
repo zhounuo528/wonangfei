@@ -8,7 +8,7 @@
         <view class="month-nav" bindtap="handleNextMonth">›</view>
     </view>
 
-    <view class="card cal-card">
+    <view class="card">
         <view class="weekday-row">
             <text class="weekday" wx:for="{{weekdayLabels}}" wx:key="*this">{{item}}</text>
         </view>
@@ -35,7 +35,7 @@
         </view>
     </view>
 
-    <view class="card summary-card" wx:if="{{monthSummary}}">
+    <view class="card" wx:if="{{monthSummary}}">
         <view class="card-head">
             <text class="card-title">本月概览</text>
             <text class="link" bindtap="goReport">月报 ›</text>
