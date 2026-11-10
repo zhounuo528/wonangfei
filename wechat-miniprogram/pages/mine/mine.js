@@ -3,6 +3,21 @@ import { dateKey, dayStats, monthStats, goalStats } from '../../core/model.js';
 import { formatCurrency } from '../../core/money.js';
 import { monthText, pad2 } from '../../utils/format.js';
 
+// 剪贴板属于微信隐私接口：未在后台「用户隐私保护指引」声明，或用户拒绝授权时，
+// 真机上会直接失败（api scope is not declared / privacy），需要给出可执行的指引。
+function isPrivacyBlocked(error) {
+    const message = (error && (error.errMsg || error.message)) || '';
+    return message.indexOf('privacy') !== -1 || message.indexOf('scope') !== -1 || message.indexOf('auth') !== -1;
+}
+
+function showPrivacyGuide(action) {
+    wx.showModal({
+        title: '需要剪贴板权限',
+        content: action + '需要使用剪贴板。请点右上角「···」→「设置」，允许使用剪贴板后重试。',
+        showCancel: false,
+    });
+}
+
 Page({
     data: {
         todayNet: '0.00',
@@ -76,8 +91,12 @@ Page({
                         showCancel: false,
                     });
                 },
-                fail: () => {
-                    wx.showToast({ title: '复制失败，请检查剪贴板权限', icon: 'none' });
+                fail: error => {
+                    if (isPrivacyBlocked(error)) {
+                        showPrivacyGuide('导出备份');
+                        return;
+                    }
+                    wx.showToast({ title: '复制失败，请重试', icon: 'none' });
                 },
             });
         } catch (error) {
@@ -116,7 +135,11 @@ Page({
                     },
                 });
             },
-            fail: () => {
+            fail: error => {
+                if (isPrivacyBlocked(error)) {
+                    showPrivacyGuide('导入备份');
+                    return;
+                }
                 wx.showToast({ title: '读取剪贴板失败', icon: 'none' });
             },
         });
